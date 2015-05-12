@@ -11,8 +11,10 @@ void Main()
 	//PossiblePathsTests.Test4();
 	//PossiblePathsTests.TestRealBoard();
 	//PossiblePathsTests.TestRealBoardLoading();
+	PossiblePathsTests.TestFindPathsFailure();
 	
-	RunSolution();
+	//fffff
+	//RunSolution();
 	
 	
 	//Each row will have which cells its using, and then which color it is
@@ -23,13 +25,20 @@ void Main()
 
 public void RunSolution()
 {
-	var flowBoard = "---g-r-y--rb----g----by-------------";
+	//var flowBoard = "---g-r-y--rb----g----by-------------";
+	//var board = new BoardMask(6, 6, flowBoard);
+	//var flowBoard = "b-b-"; //WORKS, pretty sure
+	//var board = new BoardMask(2, 2, flowBoard);
+//	var flowBoard = "b-------b"; //WORKS
+//	var board = new BoardMask(3, 3, flowBoard);
+	var flowBoard = "a-ab----b";
+	var board = new BoardMask(3, 3, flowBoard);
 	
-	var board = new BoardMask(6, 6, flowBoard);
-	var pathsGenerators = board.Flows.Values.Select(x => new PossiblePaths(x.Start, x.End, board));
+	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
 	var solver = new FlowSolver(board, pathsGenerators);
 	solver.BuildTableFull();
+	solver.ToStringOutput().Dump();
 	solver.Search();
 }
 
@@ -67,7 +76,7 @@ public class PossiblePathsTests
 		board.MarkFilled(start);
 		board.MarkFilled(end);
 		
-		var paths = new PossiblePaths(start, end, board);
+		var paths = new PossiblePaths(99, start, end, board);
 		paths.FindPaths().Dump("Result");
 	}
 	
@@ -98,7 +107,7 @@ public class PossiblePathsTests
 		Debug.Assert(endpoints.Count == 2, "Should have 2 endpoints");
 		
 		
-		var paths = new PossiblePaths(endpoints[0], endpoints[1], board);
+		var paths = new PossiblePaths(99, endpoints[0], endpoints[1], board);
 		//paths.FindPaths().Dump("Result");
 		paths.FindPaths().Count().Dump();
 	}
@@ -124,32 +133,54 @@ public class PossiblePathsTests
 		Debug.Assert(endpoints.Count == 2, "Should have 2 endpoints");
 		
 		
-		var paths = new PossiblePaths(endpoints[0], endpoints[1], board);
+		var paths = new PossiblePaths(99, endpoints[0], endpoints[1], board);
 		//paths.FindPaths().Dump("Result");
 		paths.FindPaths().Count().Dump();
+	}
+	
+	public static void TestFindPathsFailure()
+	{
+		var flowBoard = "a-ab----b";
+		var board = new BoardMask(3, 3, flowBoard);
+		
+		var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
+		
+		foreach (var pg in pathsGenerators)
+		{
+			pg.PathId.Dump("Flow");
+			Util.HorizontalRun(true, pg.Start, pg.End).Dump();
+			pg.FindPaths().Dump();
+		}
+		
+//		var solver = new FlowSolver(board, pathsGenerators);
+//		solver.BuildTableFull();
+//		solver.ToStringOutput().Dump();
 	}
 }
 
 public class PossiblePaths
 {
-	public PossiblePaths(Coords start, Coords end, BoardMask board)
+	public PossiblePaths(int pathId, Coords start, Coords end, BoardMask board)
 	{
+		PathId = pathId;
 		Start = start;
 		End = end;
 		Board = board;
 	}
 	
+	public readonly int PathId;
 	public readonly Coords Start;
 	public readonly Coords End;
 	public readonly BoardMask Board;
 	
 	
-	Queue<Coords> queue = new Queue<Coords>();
+	Stack<Coords> queue = new Stack<Coords>();
 	HashSet<Coords> visited = new HashSet<Coords>();
 	
 	public IEnumerable<IList<Coords>> FindPaths()
 	{
 		queue.Enqueue(Start);
+		visited.Add(Start);
 		
 		return FindPaths_Recurse(NextSteps(Start));
 	}
@@ -341,7 +372,11 @@ public class FlowSolver : DancingLinks
 	BoardMask Board;
 	IEnumerable<PossiblePaths> PathsGenerators;
 	
-	public IEnumerable<int> BuildDancingLinksRow(IEnumerable<Coords> path)
+	public IEnumerable<IEnumerable<int>> BuildDancingLinksRow(PossiblePaths paths)
+	{
+		return paths.FindPaths().Select(x => BuildDancingLinksRow(paths.PathId, x));
+	}
+	public IEnumerable<int> BuildDancingLinksRow(int flowId, IEnumerable<Coords> path)
 	{
 		//Cell indexes map directly
 		foreach (var cell in path)
@@ -349,7 +384,7 @@ public class FlowSolver : DancingLinks
 			yield return Board.CoordsToCellId(cell);
 		}
 		//FlowNumbers are offset by cellCount
-		yield return Board.Width*Board.Height + Board.ColorCount;
+		yield return Board.Width*Board.Height + flowId;
 	}
 	
 	private void SetColumnNames()
@@ -371,8 +406,9 @@ public class FlowSolver : DancingLinks
 	{
 		foreach (var paths in PathsGenerators)
 		{
-			foreach (var DLCellList in paths.FindPaths()
-										.Select(x => BuildDancingLinksRow(x)))
+//			foreach (var DLCellList in paths.FindPaths()
+//										.Select(x => BuildDancingLinksRow(x)))
+			foreach (var DLCellList in BuildDancingLinksRow(paths))
 			{
 				AddRow(DLCellList);
 			}
@@ -393,8 +429,15 @@ public class FlowSolver : DancingLinks
 		{
 			var sp = s;
 			while (!sp.Header.Name.ToString().StartsWith("color")) sp = sp.West;
-			yield return sp.Header.Name.ToString()
-							+ " " + sp.East.Header.Name.ToString();
+			//yield return sp.Header.Name.ToString()
+			//				+ " " + sp.East.Header.Name.ToString();
+			var colorNode = sp;
+			var sn = colorNode.East;
+			while (sn != colorNode)
+			{
+				yield return sn.Header.Name.ToString();
+				sn = sn.East;
+			}
 		}
 	}
 	

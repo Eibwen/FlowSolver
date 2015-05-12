@@ -233,9 +233,7 @@ public class BoardMask
 				if (!EmptyCellChars.Contains(value))
 				{
 					MarkFilled(coords);
-				}
-				else
-				{
+					
 					if (!colorChars.Contains(value))
 						colorChars.Add(value);
 				}
@@ -287,15 +285,18 @@ public struct Coords
 
 public class FlowSolver : DancingLinks
 {
-	public FlowSolver(BoardMask board)
+	public FlowSolver(BoardMask board, List<PossiblePaths> pathsGenerators)
 		: base(board.Width*board.Height + board.ColorCount)
 	{
 		Board = board;
+		PathsGenerators = pathsGenerators;
+		SetColumnNames();
 	}
 	
 	BoardMask Board;
+	List<PossiblePaths> PathsGenerators;
 	
-	public IEnumerable<int> BuildDancingLinksRow(IEnumerable<Coords> path, int flowNumber)
+	public IEnumerable<int> BuildDancingLinksRow(IEnumerable<Coords> path)
 	{
 		//Cell indexes map directly
 		foreach (var cell in path)
@@ -303,7 +304,32 @@ public class FlowSolver : DancingLinks
 			yield return Board.CoordsToCellId(cell);
 		}
 		//FlowNumbers are offset by cellCount
-		yield return Board.Width*Board.Height + flowNumber;
+		yield return Board.Width*Board.Height + Board.ColorCount;
+	}
+	
+	private void SetColumnNames()
+	{
+		var cells = (Board.Width*Board.Height);
+		for (int i = 0; i < cells; ++i)
+		{
+			Columns[i].Name = "cell" + i;
+		}
+		for (int i = 0; i < Board.ColorCount; ++i)
+		{
+			Columns[cells + i].Name = "color" + i;
+		}
+	}
+	
+	public void BuildTableFull()
+	{
+		foreach (var paths in PathsGenerators)
+		{
+			foreach (var DLCellList in paths.FindPaths()
+										.Select(x => BuildDancingLinksRow(x)))
+			{
+				AddRow(DLCellList);
+			}
+		}
 	}
 }
 

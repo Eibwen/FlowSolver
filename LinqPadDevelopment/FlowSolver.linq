@@ -11,10 +11,10 @@ void Main()
 	//PossiblePathsTests.Test4();
 	//PossiblePathsTests.TestRealBoard();
 	//PossiblePathsTests.TestRealBoardLoading();
-	PossiblePathsTests.TestFindPathsFailure();
+	//PossiblePathsTests.TestFindPathsFailure();
 	
 	//fffff
-	//RunSolution();
+	RunSolution();
 	
 	
 	//Each row will have which cells its using, and then which color it is
@@ -25,20 +25,20 @@ void Main()
 
 public void RunSolution()
 {
-	//var flowBoard = "---g-r-y--rb----g----by-------------";
-	//var board = new BoardMask(6, 6, flowBoard);
+	var flowBoard = "---g-r-y--rb----g----by-------------";
+	var board = new BoardMask(6, 6, flowBoard);
 	//var flowBoard = "b-b-"; //WORKS, pretty sure
 	//var board = new BoardMask(2, 2, flowBoard);
 //	var flowBoard = "b-------b"; //WORKS
 //	var board = new BoardMask(3, 3, flowBoard);
-	var flowBoard = "a-ab----b";
-	var board = new BoardMask(3, 3, flowBoard);
+	//var flowBoard = "a-ab----b";
+	//var board = new BoardMask(3, 3, flowBoard);
 	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
 	var solver = new FlowSolver(board, pathsGenerators);
 	solver.BuildTableFull();
-	solver.ToStringOutput().Dump();
+	//solver.ToStringOutput().Dump();
 	solver.Search();
 }
 
@@ -179,7 +179,7 @@ public class PossiblePaths
 	
 	public IEnumerable<IList<Coords>> FindPaths()
 	{
-		queue.Enqueue(Start);
+		queue.Push(Start);
 		visited.Add(Start);
 		
 		return FindPaths_Recurse(NextSteps(Start));
@@ -189,7 +189,7 @@ public class PossiblePaths
 	{
 		foreach (var step in nextSteps)
 		{
-			queue.Enqueue(step);
+			queue.Push(step);
 			visited.Add(step);
 			
 			if (step.Equals(End))
@@ -203,7 +203,7 @@ public class PossiblePaths
 			
 			//throw new Exception("Need dynamic programming here...");
 			//TODO Need dynamic programming here...
-			queue.Dequeue();
+			queue.Pop();
 			visited.Remove(step);
 		}
 	}

@@ -10,7 +10,9 @@ void Main()
 	PossiblePathsTests.CoordsTest();
 	//PossiblePathsTests.Test4();
 	//PossiblePathsTests.TestRealBoard();
-	PossiblePathsTests.TestRealBoardLoading();
+	//PossiblePathsTests.TestRealBoardLoading();
+	
+	RunSolution();
 	
 	
 	//Each row will have which cells its using, and then which color it is
@@ -18,6 +20,19 @@ void Main()
 	//  cells (height * width)
 	//  color count
 }
+
+public void RunSolution()
+{
+	var flowBoard = "---g-r-y--rb----g----by-------------";
+	
+	var board = new BoardMask(6, 6, flowBoard);
+	var pathsGenerators = board.Flows.Values.Select(x => new PossiblePaths(x.Start, x.End, board));
+	
+	var solver = new FlowSolver(board, pathsGenerators);
+	solver.BuildTableFull();
+	solver.Search();
+}
+
 
 public class PossiblePathsTests
 {
@@ -96,7 +111,6 @@ public class PossiblePathsTests
 		var endpoints = new List<Coords>();
 		
 		var board = new BoardMask(6, 6, flowBoard);
-		board.Dump();
 		
 		
 		for (int i = 0; i < flowBoard.Length; ++i)
@@ -215,14 +229,22 @@ public class BoardMask
 	public readonly int Height;
 	
 	bool _boardLoaded = false;
-	public int ColorCount { get; private set; }
+	public int ColorCount
+	{
+		get
+		{
+			ThrowIfNotLoaded();
+			return Flows.Count;
+		}
+	}
 	
+	public Dictionary<char, FlowEndpoint> Flows { get; private set; }
 	BitArray _array;
 	
 	char[] EmptyCellChars = new [] { '-', ' ', '_' };
 	public void LoadBoardDescription(string boardDescription)
 	{
-		var colorChars = new HashSet<char>();
+		var colorChars = new Dictionary<char, FlowEndpoint>();
 		
 		for (int x = 0; x < Width; ++x)
 			for (int y = 0; y < Height; ++y)
@@ -234,12 +256,16 @@ public class BoardMask
 				{
 					MarkFilled(coords);
 					
-					if (!colorChars.Contains(value))
-						colorChars.Add(value);
+					if (!colorChars.ContainsKey(value))
+						colorChars.Add(value, new FlowEndpoint(value, coords));
+					else
+					{
+						colorChars[value].SetEnd(coords);
+					}
 				}
 			}
 		
-		ColorCount = colorChars.Count;
+		Flows = colorChars;
 		_boardLoaded = true;
 	}
 	
@@ -279,22 +305,41 @@ public struct Coords
 	public readonly int X;
 	public readonly int Y;
 }
+public class FlowEndpoint
+{
+	public FlowEndpoint(char flow, Coords start)
+	{
+		Flow = flow;
+		Start = start;
+	}
+	
+	public readonly char Flow;
+	public readonly Coords Start;
+	public Coords End { get; private set; }
+	
+	public void SetEnd(Coords coords)
+	{
+		End = coords;
+	}
+}
 
 
 
 
 public class FlowSolver : DancingLinks
 {
-	public FlowSolver(BoardMask board, List<PossiblePaths> pathsGenerators)
+	public FlowSolver(BoardMask board, IEnumerable<PossiblePaths> pathsGenerators)
 		: base(board.Width*board.Height + board.ColorCount)
 	{
+		SolutionFound = OutputSolution;
+		
 		Board = board;
 		PathsGenerators = pathsGenerators;
 		SetColumnNames();
 	}
 	
 	BoardMask Board;
-	List<PossiblePaths> PathsGenerators;
+	IEnumerable<PossiblePaths> PathsGenerators;
 	
 	public IEnumerable<int> BuildDancingLinksRow(IEnumerable<Coords> path)
 	{
@@ -316,6 +361,8 @@ public class FlowSolver : DancingLinks
 		}
 		for (int i = 0; i < Board.ColorCount; ++i)
 		{
+			//TODO put the path in this?
+			//aa
 			Columns[cells + i].Name = "color" + i;
 		}
 	}
@@ -330,6 +377,37 @@ public class FlowSolver : DancingLinks
 				AddRow(DLCellList);
 			}
 		}
+	}
+	
+	private bool OutputSolution(IEnumerable<DancingLinkNode> solution)
+	{
+		var paths = GetFlowPaths(solution);
+		paths.Dump();
+		
+		//Always return true here... get all solutions
+		return true;
+	}
+	private IEnumerable<string> GetFlowPaths(IEnumerable<DancingLinkNode> solution)
+	{
+		foreach (var s in solution)
+		{
+			var sp = s;
+			while (!sp.Header.Name.ToString().StartsWith("color")) sp = sp.West;
+			yield return sp.Header.Name.ToString()
+							+ " " + sp.East.Header.Name.ToString();
+		}
+	}
+	
+	class FlowPath
+	{
+		public FlowPath(char flow, IEnumerable<Coords> path)
+		{
+			Flow = flow;
+			Path = path;
+		}
+		
+		public char Flow { get; private set; }
+		public IEnumerable<Coords> Path { get; private set; }
 	}
 }
 

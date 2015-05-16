@@ -529,7 +529,10 @@ public class FlowSolver : DancingLinks
 	private bool OutputSolution(IEnumerable<DancingLinkNode> solution)
 	{
 		var pathStrings = GetFlowPathStrings(solution);
-		FlowSplitter(pathStrings).Dump();
+		var paths = FlowSplitter(pathStrings);
+		
+		var renderer = new FlowRenderer(Board.Width, Board.Height, paths);
+		renderer.Render();
 		
 		//Always return true here... get all solutions
 		return true;
@@ -574,20 +577,71 @@ public class FlowSolver : DancingLinks
 		}
 		yield return new FlowPath(colorString[5], buildingPath);
 	}
-	
-	class FlowPath
+}
+public class FlowPath
+{
+	public FlowPath(char flow, IEnumerable<Coords> path)
 	{
-		public FlowPath(char flow, IEnumerable<Coords> path)
-		{
-			Flow = flow;
-			Path = path;
-		}
-		
-		public char Flow { get; private set; }
-		public IEnumerable<Coords> Path { get; private set; }
+		Flow = flow;
+		Path = path;
 	}
+	
+	public char Flow { get; private set; }
+	public IEnumerable<Coords> Path { get; private set; }
 }
 
+public class FlowRenderer
+{
+	public FlowRenderer(int cellColumns, int cellRows, IEnumerable<FlowPath> paths)
+	{
+		CellColumns = cellColumns;
+		CellRows = cellRows;
+		Paths = paths;
+	}
+	
+	int CellColumns;
+	int CellRows;
+	readonly IEnumerable<FlowPath> Paths;
+	
+	public void Render()
+	{
+		var width = 200;
+		var height = 200;
+		var padding = 2;
+		
+		var cellWidth = (float)width / CellColumns;
+		var cellHeight = (float)height / CellRows;
+		
+		using (var b = new Bitmap(width, height))
+		using (var g = Graphics.FromImage(b))
+		{
+			g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+			foreach (var p in Paths)
+			{
+				var color = GetColor(p.Flow);
+				using (var brush = new SolidBrush(color))
+				{
+					foreach (var solutionCell in p.Path)
+					{
+						g.FillEllipse(brush,
+							cellWidth * solutionCell.X + padding,
+							cellHeight * solutionCell.Y + padding,
+							cellWidth - 2*padding,
+							cellHeight - 2*padding);
+					}
+				}
+			}
+			
+			b.Dump();
+		}
+	}
+	
+	Random rand = new Random();
+	Color GetColor(char flow)
+	{
+		return Color.FromArgb(rand.Next(256), rand.Next(256), rand.Next(256));
+	}
+}
 
 
 

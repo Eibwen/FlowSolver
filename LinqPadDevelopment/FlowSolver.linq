@@ -1,4 +1,9 @@
-<Query Kind="Program" />
+<Query Kind="Program">
+  <NuGetReference>FubuCore</NuGetReference>
+  <NuGetReference>Newtonsoft.Json</NuGetReference>
+  <Namespace>Newtonsoft.Json</Namespace>
+  <Namespace>System.Drawing</Namespace>
+</Query>
 
 //TODO support bridges
 
@@ -25,8 +30,8 @@ void Main()
 
 public void RunSolution()
 {
-	var flowBoard = "---g-r-y--rb----g----by-------------";
-	var board = new BoardMask(6, 6, flowBoard);
+//	var flowBoard = "---g-r-y--rb----g----by-------------";
+//	var board = new BoardMask(6, 6, flowBoard);
 	//var flowBoard = "b-b-"; //WORKS, pretty sure
 	//var board = new BoardMask(2, 2, flowBoard);
 //	var flowBoard = "b-------b"; //WORKS
@@ -34,9 +39,21 @@ public void RunSolution()
 	//var flowBoard = "a-ab----b";
 	//var board = new BoardMask(3, 3, flowBoard);
 	
+//	//6x6 Mania, 108, not a good test board...
+//	//  Well it is good for ones where ALL are valid, since the one with edge endpoints only has one possible path
+//	//  But not good cause its only in one corner
+//	var flowBoard = "byg-c-----g-------o--cm--by-r--or-m-";
+//	var board = new BoardMask(6, 6, flowBoard);
+
+	//6x6 Mania, 110
+	var flowBoard = "brbogy-------r----------go---------y";
+	var board = new BoardMask(6, 6, flowBoard);
+	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
 	var solver = new FlowSolver(board, pathsGenerators);
+	solver.DrawBoard();
+	
 	solver.BuildTableFull();
 	//solver.ToStringOutput().Dump();
 	solver.Search();
@@ -57,9 +74,14 @@ public class PossiblePathsTests
 	{
 		var a = new Coords(23, 53);
 		var b = new Coords(23, 53);
+		var c = new Coords(23, 54);
 		
 		//Debug.Assert(a == b, "== operator");
 		Debug.Assert(a.Equals(b), "Equals operator");
+		Debug.Assert(!c.Equals(b), "Equals operator");
+		
+		Debug.Assert(a.GetHashCode().Equals(b.GetHashCode()), "GetHashCode operator");
+		Debug.Assert(!c.GetHashCode().Equals(b.GetHashCode()), "GetHashCode operator");
 	}
 	
 	public static void Test4()
@@ -181,7 +203,7 @@ public class PossiblePaths
 	{
 		foreach (var path in FindPaths_RawResults())
 		{
-			if (CountAsValidPath_EdgePoints(Start, End, path))
+			if (CountAsValidPath_OtherCanBeReached(Start, End, path))
 				yield return path;
 		}
 		//TODO any others get thrown away?... count those to see increases?
@@ -252,12 +274,7 @@ public class PossiblePaths
 	}
 	
 	
-	//TODO edges for SUPSER NOTE
-	// for edge paths, my algorithmy thing
-	// Require that no other ones can go EITHER way
-	//  If they can go ONE way, still counts?
-	//  So if 2 out of 3 that touch the wall, are closed, that works
-	public bool CountAsValidPath_EdgePoints(Coords start, Coords end, IList<Coords> path)
+	bool CountAsValidPath_OtherCanBeReached(Coords start, Coords end, IList<Coords> path)
 	{
 		//For now, eventually IsEdgeNode will find more paths
 		//TODO above thing
@@ -266,6 +283,9 @@ public class PossiblePaths
 			return true;
 		
 		//Both are edge nodes
+		
+		var canReach = new FlowPassagesCanReach(Board, path);
+		
 		//TODO is there a better way to get the flows at this point?
 		foreach (var flow in Board.Flows.Values)
 		{
@@ -280,19 +300,17 @@ public class PossiblePaths
 			}
 			
 			
-			var startPasses = new FlowPassages(flow.Start, path);
-			var endPasses = new FlowPassages(flow.End, path);
-			
-			if (!startPasses.EqualiventPassages(endPasses))
+			if (!canReach.CanBeReached(flow))
 			{
-				//NumberOfPasses fails, return false
+				//"filtered path".Dump();
+				//Cannot be reached, this path blocks other flows completely, return false
 				return false;
 			}
 		}
-		
-		//Everyone passes the limited tests here
+		//Everyone passes the tests here
 		return true;
 	}
+
 	
 	bool IsEdgeNode(Coords current)
 	{
@@ -422,47 +440,144 @@ public class FlowEndpoint
 	}
 }
 
-public class FlowPassages
+public class FlowPassagesCanReach
 {
-	public FlowPassages(Coords current, IList<Coords> path)
+	public FlowPassagesCanReach(BoardMask board, IList<Coords> path)
 	{
-		//TODO build an .EvenOrOddCount method, and if match { int i = 1 - i }
-		North = path.Count(x => x.X > current.X);
-		South = path.Count(x => x.X < current.X);
-		West = path.Count(x => x.Y > current.Y);
-		East = path.Count(x => x.Y < current.Y);
+		Board = board;
+		Path = path;
+		
+		BuildPathCells(path, Board.Width, Board.Height);
 	}
 	
-	public int North { get; private set; }
-	public int South { get; private set; }
-	public int West { get; private set; }
-	public int East { get; private set; }
+	//FOR DEBUG USE ONLY...
+	IEnumerable<Coords> Path { get; set; }
+	BoardMask Board { get; set; }
 	
-	public bool EqualiventPassages(FlowPassages other)
+	BitArray PathCells;
+	Dictionary<Coords, HashSet<Coords>> DynamicProgrammingLookup = new Dictionary<Coords, HashSet<Coords>>();
+	
+	void BuildPathCells(IList<Coords> path, int boardWidth, int boardHeight)
 	{
-		throw new Exception("Figure this out");
+		PathCells = new BitArray(boardWidth * boardHeight);
+		foreach (var cell in path)
+		{
+			PathCells[cell.X + boardWidth*cell.Y] = true;
+		}
 	}
-	//TODO add an equals, or comparison, that is just even/odd
-//	public override int GetHashCode()
+	
+	public bool CanBeReached(FlowEndpoint flow)
+	{
+		return GetTouchingCells(flow.Start).Contains(flow.End);
+	}
+	
+	
+	HashSet<Coords> GetTouchingCells(Coords cell)
+	{
+		if (DynamicProgrammingLookup.ContainsKey(cell))
+			return DynamicProgrammingLookup[cell];
+		else
+		{
+			var cellGroup = FindTouchingCoords(cell);
+			foreach (var neighbor in cellGroup)
+			{
+				DynamicProgrammingLookup.Add(neighbor, cellGroup);
+			}
+			
+			return cellGroup;
+		}
+	}
+	
+	
+	
+	
+	public HashSet<Coords> FindTouchingCoords(Coords start)
+	{
+		var visited = new HashSet<Coords>();
+		var toCheck = new Queue<Coords>();
+		
+		Action<Coords> nextStepsOperation = x =>
+			{
+				toCheck.Enqueue(x);
+				visited.Add(x);
+			};
+		
+		visited.Add(start);
+		NextSteps(visited, start).Each(nextStepsOperation);
+		while (toCheck.Count > 0)
+		{
+			var cell = toCheck.Dequeue();
+			//visited.Add(cell);
+			
+			NextSteps(visited, cell).Each(nextStepsOperation);
+		}
+		
+//		var renderer = new FlowRenderer();
+//		renderer.Render(6, 6, new [] { new FlowPath('a', Path), new FlowPath('b', visited) });
+//		renderer.Render(6, 6, new [] { new FlowPath('b', visited), new FlowPath('a', Path) });
+//		Path.Dump();
+		
+		return visited;
+	}
+	bool IsInPath(Coords cell)
+	{
+		return PathCells[Board.CoordsToCellId(cell)];
+	}
+	
+	//Nearly copied from PossiblePaths... could be merged into a single service class
+//	HashSet<Coords> visited = new HashSet<Coords>();
+//	public IEnumerable<Coords> FindTouchingCoords_RawResults(Coords start)
 //	{
-//		return (North % 2 << 0)
-//			+ (South % 2 << 1)
-//			+ (West % 2 << 2)
-//			+ (East % 2 << 2);
+//		visited.Add(start);
+//		
+//		return FindTouchingCoords_Recurse(NextSteps(start));
 //	}
 //	
-//	public override bool Equals(object other)
+//	IEnumerable<Coords> FindTouchingCoords_Recurse(IEnumerable<Coords> nextSteps)
 //	{
-//		var obj = other as FlowPassages;
-//		if (obj == null)
-//			return false;
-//		return this.North % 2 == obj.North % 2
-//			&& this.South % 2 == obj.South % 2
-//			&& this.West % 2 == obj.West % 2
-//			&& this.East % 2 == obj.East % 2;
+//		foreach (var step in nextSteps)
+//		{
+//			visited.Add(step);
+//			
+//			//Don't need to bother with the return value from sub functions, since sharing same HashSet
+//			FindTouchingCoords_Recurse(NextSteps(step));
+//		}
+//		return visited;
 //	}
+	
+	IEnumerable<Coords> NextSteps(HashSet<Coords> visited, Coords current)
+	{
+		foreach (var c in AllNextSteps(current))
+		{
+			//c.Dump("step");
+			//End.Dump("end");
+			//Util.HorizontalRun(true, c.Equals(End), !visited.Contains(c), !Board.IsFilled(c)).Dump("compare");
+			
+			if (!visited.Contains(c)
+				//&& !Board.IsFilled(c)
+				&& !IsInPath(c))
+			{
+				yield return c;
+			}
+		}
+	}
+	IEnumerable<Coords> AllNextSteps(Coords current)
+	{
+		//current.Dump();
+		//West
+		if (current.X > 0)
+			yield return new Coords(current.X - 1, current.Y);
+		//East
+		if (current.X < Board.Width-1)
+			yield return new Coords(current.X + 1, current.Y);
+		//North
+		if (current.Y > 0)
+			yield return new Coords(current.X, current.Y - 1);
+		//South
+		if (current.Y < Board.Height-1)
+			yield return new Coords(current.X, current.Y + 1);
+	}
 }
-
 
 
 
@@ -523,7 +638,7 @@ public class FlowSolver : DancingLinks
 			}
 		}
 		
-		//EnumeratePath(HEAD, (f) => f.East).Cast<DancingLinkHeader>().Select(x => x.Count).Dump("Column counts");
+		EnumeratePath(HEAD, (f) => f.East).Cast<DancingLinkHeader>().Select(x => x.Count).Dump("Column counts");
 	}
 	
 	private bool OutputSolution(IEnumerable<DancingLinkNode> solution)
@@ -531,8 +646,8 @@ public class FlowSolver : DancingLinks
 		var pathStrings = GetFlowPathStrings(solution);
 		var paths = FlowSplitter(pathStrings);
 		
-		var renderer = new FlowRenderer(Board.Width, Board.Height, paths);
-		renderer.Render();
+		var renderer = new FlowRenderer();
+		renderer.Render(Board.Width, Board.Height, paths);
 		
 		//Always return true here... get all solutions
 		return true;
@@ -577,6 +692,13 @@ public class FlowSolver : DancingLinks
 		}
 		yield return new FlowPath(colorString[5], buildingPath);
 	}
+	
+	public void DrawBoard()
+	{
+		var renderer = new FlowRenderer();
+		renderer.Render(Board.Width, Board.Height,
+			Board.Flows.Values.Select(x => new FlowPath(x.Flow, new [] { x.Start, x.End })));
+	}
 }
 public class FlowPath
 {
@@ -592,31 +714,23 @@ public class FlowPath
 
 public class FlowRenderer
 {
-	public FlowRenderer(int cellColumns, int cellRows, IEnumerable<FlowPath> paths)
-	{
-		CellColumns = cellColumns;
-		CellRows = cellRows;
-		Paths = paths;
-	}
-	
-	int CellColumns;
-	int CellRows;
-	readonly IEnumerable<FlowPath> Paths;
-	
-	public void Render()
+	public void Render(int cellColumns, int cellRows, IEnumerable<FlowPath> paths)
 	{
 		var width = 200;
 		var height = 200;
 		var padding = 2;
 		
-		var cellWidth = (float)width / CellColumns;
-		var cellHeight = (float)height / CellRows;
+		var cellWidth = (float)width / cellColumns;
+		var cellHeight = (float)height / cellRows;
 		
 		using (var b = new Bitmap(width, height))
 		using (var g = Graphics.FromImage(b))
 		{
 			g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-			foreach (var p in Paths)
+			
+			g.DrawRectangle(new Pen(Color.Black), 0, 0, width-1, height-1);
+			
+			foreach (var p in paths)
 			{
 				var color = GetColor(p.Flow);
 				using (var brush = new SolidBrush(color))

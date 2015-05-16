@@ -179,6 +179,16 @@ public class PossiblePaths
 	
 	public IEnumerable<IList<Coords>> FindPaths()
 	{
+		foreach (var path in FindPaths_RawResults())
+		{
+			if (CountAsValidPath_EdgePoints(Start, End, path))
+				yield return path;
+		}
+		//TODO any others get thrown away?... count those to see increases?
+	}
+	
+	public IEnumerable<IList<Coords>> FindPaths_RawResults()
+	{
 		queue.Push(Start);
 		visited.Add(Start);
 		
@@ -239,6 +249,59 @@ public class PossiblePaths
 		//South
 		if (current.Y < Board.Height-1)
 			yield return new Coords(current.X, current.Y + 1);
+	}
+	
+	
+	bool CountAsValidPath_EdgePoints(Coords start, Coords end, IList<Coords> path)
+	{
+		//For now, eventually IsEdgeNode will find more paths
+		//TODO above thing
+		if (!IsEdgeNode(start)
+			|| !IsEdgeNode(end))
+			return true;
+		
+		//Both are edge nodes
+		//TODO is there a better way to get the flows at this point?
+		foreach (var flow in Board.Flows.Values)
+		{
+			if (flow.Start.Equals(start)
+				|| flow.End.Equals(end)
+				|| flow.Start.Equals(end)
+				|| flow.End.Equals(start))
+			{
+				//Cannot test THIS path right now
+				//  Extra safe way to test this, by checking all permutation of endpoints
+				continue;
+			}
+			
+			
+			var startPasses = new FlowPassages(flow.Start, path);
+			var endPasses = new FlowPassages(flow.End, path);
+			
+			if (!startPasses.EqualiventPassages(endPasses))
+			{
+				//NumberOfPasses fails, return false
+				return false;
+			}
+		}
+		
+		//Everyone passes the limited tests here
+		return true;
+	}
+	
+	bool IsEdgeNode(Coords current)
+	{
+		//TODO also check if routes around it are blocked, and consider the edge node endpoints to be those
+		//  Note DO NOT count the same color then...
+		
+		//fuck, find all the endpoints
+		//  find where this line crosses it
+		//  and the other endpoint should cross each line/column on the same way
+		
+		return current.Y == 0
+			|| current.Y == Board.Height-1
+			|| current.X == 0
+			|| current.X == Board.Width-1;
 	}
 }
 public class BoardMask
@@ -354,6 +417,47 @@ public class FlowEndpoint
 	}
 }
 
+public class FlowPassages
+{
+	public FlowPassages(Coords current, IList<Coords> path)
+	{
+		//TODO build an .EvenOrOddCount method, and if match { int i = 1 - i }
+		North = path.Count(x => x.X > current.X);
+		South = path.Count(x => x.X < current.X);
+		West = path.Count(x => x.Y > current.Y);
+		East = path.Count(x => x.Y < current.Y);
+	}
+	
+	public int North { get; private set; }
+	public int South { get; private set; }
+	public int West { get; private set; }
+	public int East { get; private set; }
+	
+	public bool EqualiventPassages(FlowPassages other)
+	{
+		throw new Exception("Figure this out");
+	}
+	//TODO add an equals, or comparison, that is just even/odd
+//	public override int GetHashCode()
+//	{
+//		return (North % 2 << 0)
+//			+ (South % 2 << 1)
+//			+ (West % 2 << 2)
+//			+ (East % 2 << 2);
+//	}
+//	
+//	public override bool Equals(object other)
+//	{
+//		var obj = other as FlowPassages;
+//		if (obj == null)
+//			return false;
+//		return this.North % 2 == obj.North % 2
+//			&& this.South % 2 == obj.South % 2
+//			&& this.West % 2 == obj.West % 2
+//			&& this.East % 2 == obj.East % 2;
+//	}
+}
+
 
 
 
@@ -413,6 +517,8 @@ public class FlowSolver : DancingLinks
 				AddRow(DLCellList);
 			}
 		}
+		
+		//EnumeratePath(HEAD, (f) => f.East).Cast<DancingLinkHeader>().Select(x => x.Count).Dump("Column counts");
 	}
 	
 	private bool OutputSolution(IEnumerable<DancingLinkNode> solution)

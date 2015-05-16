@@ -252,7 +252,12 @@ public class PossiblePaths
 	}
 	
 	
-	bool CountAsValidPath_EdgePoints(Coords start, Coords end, IList<Coords> path)
+	//TODO edges for SUPSER NOTE
+	// for edge paths, my algorithmy thing
+	// Require that no other ones can go EITHER way
+	//  If they can go ONE way, still counts?
+	//  So if 2 out of 3 that touch the wall, are closed, that works
+	public bool CountAsValidPath_EdgePoints(Coords start, Coords end, IList<Coords> path)
 	{
 		//For now, eventually IsEdgeNode will find more paths
 		//TODO above thing
@@ -523,13 +528,13 @@ public class FlowSolver : DancingLinks
 	
 	private bool OutputSolution(IEnumerable<DancingLinkNode> solution)
 	{
-		var paths = GetFlowPaths(solution);
-		paths.Dump();
+		var pathStrings = GetFlowPathStrings(solution);
+		FlowSplitter(pathStrings).Dump();
 		
 		//Always return true here... get all solutions
 		return true;
 	}
-	private IEnumerable<string> GetFlowPaths(IEnumerable<DancingLinkNode> solution)
+	private IEnumerable<string> GetFlowPathStrings(IEnumerable<DancingLinkNode> solution)
 	{
 		foreach (var s in solution)
 		{
@@ -538,6 +543,7 @@ public class FlowSolver : DancingLinks
 			//yield return sp.Header.Name.ToString()
 			//				+ " " + sp.East.Header.Name.ToString();
 			var colorNode = sp;
+			yield return colorNode.Header.Name.ToString();
 			var sn = colorNode.East;
 			while (sn != colorNode)
 			{
@@ -545,6 +551,28 @@ public class FlowSolver : DancingLinks
 				sn = sn.East;
 			}
 		}
+	}
+	IEnumerable<FlowPath> FlowSplitter(IEnumerable<string> pathStrings)
+	{
+		var buildingPath = new List<Coords>();
+		string colorString = null;
+		foreach (var p in pathStrings)
+		{
+			if (p.StartsWith("color"))
+			{
+				if (buildingPath.Count > 0)
+				{
+					yield return new FlowPath(colorString[5], buildingPath);
+					buildingPath = new List<Coords>();
+				}
+				colorString = p;
+				continue;
+			}
+			
+			var c = Board.CellIdToCoords(Int32.Parse(p.Replace("cell", "")));
+			buildingPath.Add(c);
+		}
+		yield return new FlowPath(colorString[5], buildingPath);
 	}
 	
 	class FlowPath

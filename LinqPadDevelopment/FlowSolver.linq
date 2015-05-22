@@ -47,17 +47,17 @@ public void RunSolution()
 //	var flowBoard = "byg-c-----g-------o--cm--by-r--or-m-";
 //	var board = new BoardMask(6, 6, flowBoard);
 
-	//6x6 Mania, 110
-	var flowBoard = "brbogy-------r----------go---------y";
-	var board = new BoardMask(6, 6, flowBoard);
+//	//6x6 Mania, 110
+//	var flowBoard = "brbogy-------r----------go---------y";
+//	var board = new BoardMask(6, 6, flowBoard);
 	
 //	//6x6 Mania, 108
 //	var flowBoard = "byg c     g       o  cm  by r  or m ";
 //	var board = new BoardMask(6, 6, flowBoard);
 
-//	//6x6 Mania, 111
-//	var flowBoard = "b-----r---g--------gbr--------------";
-//	var board = new BoardMask(6, 6, flowBoard);
+	//6x6 Mania, 111
+	var flowBoard = "b-----r---g--------gbr--------------";
+	var board = new BoardMask(6, 6, flowBoard);
 	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
@@ -338,9 +338,10 @@ public class PossiblePaths
 			|| current.X == Board.Width-1;
 	}
 }
-public class BoardMask
+public class BoardMask : CellTranslator
 {
 	public BoardMask(int width, int height)
+		: base(width)
 	{
 		Width = width;
 		Height = height;
@@ -412,7 +413,15 @@ public class BoardMask
 		if (!_boardLoaded)
 			throw new Exception("Failcakes");
 	}
+}
+public class CellTranslator
+{
+	public CellTranslator(int boardWidth)
+	{
+		Width = boardWidth;
+	}
 	
+	readonly int Width;
 	
 	public int CoordsToCellId(Coords cell)
 	{
@@ -451,31 +460,55 @@ public class FlowEndpoint
 	}
 }
 
+public class PathDescription
+{
+	public PathDescription(IList<Coords> path, int boardWidth, int boardHeight)
+	{
+		Path = path;
+		PathCells = BuildPathCells(path, boardWidth, boardHeight);
+		cellTranslator = new CellTranslator(boardWidth);
+	}
+	
+	BitArray BuildPathCells(IList<Coords> path, int boardWidth, int boardHeight)
+	{
+		var pathCells = new BitArray(boardWidth * boardHeight);
+		foreach (var cell in path)
+		{
+			pathCells[cell.X + boardWidth*cell.Y] = true;
+		}
+		return pathCells;
+	}
+	
+	//FOR DEBUG USE ONLY...
+	IEnumerable<Coords> Path { get; set; }
+	
+	readonly CellTranslator cellTranslator;
+	public readonly BitArray PathCells;
+	
+	public bool IsInPath(Coords cell)
+	{
+		return PathCells[cellTranslator.CoordsToCellId(cell)];
+	}
+	
+	public void DebugShowPath()
+	{
+		var renderer = new FlowRenderer();
+		renderer.Render(6, 6, new [] { new FlowPath('a', Path) });
+	}
+}
 public class FlowPassagesCanReach
 {
 	public FlowPassagesCanReach(BoardMask board, IList<Coords> path)
 	{
 		Board = board;
-		Path = path;
 		
-		BuildPathCells(path, Board.Width, Board.Height);
+		pathDescription = new PathDescription(path, Board.Width, Board.Height);
 	}
 	
-	//FOR DEBUG USE ONLY...
-	IEnumerable<Coords> Path { get; set; }
 	BoardMask Board { get; set; }
 	
-	BitArray PathCells;
+	PathDescription pathDescription;
 	Dictionary<Coords, HashSet<Coords>> DynamicProgrammingLookup = new Dictionary<Coords, HashSet<Coords>>();
-	
-	void BuildPathCells(IList<Coords> path, int boardWidth, int boardHeight)
-	{
-		PathCells = new BitArray(boardWidth * boardHeight);
-		foreach (var cell in path)
-		{
-			PathCells[cell.X + boardWidth*cell.Y] = true;
-		}
-	}
 	
 	public bool CanBeReached(FlowEndpoint flow)
 	{
@@ -506,8 +539,8 @@ public class FlowPassagesCanReach
 					cellGroup.Dump();
 					//DynamicProgrammingLookup.Dump();
 					var renderer = new FlowRenderer();
-					 renderer.Render(6, 6, new [] { new FlowPath('a', Path) });
 					DynamicProgrammingLookup.Values.Each(x => renderer.Render(6, 6, new [] { new FlowPath('a', x) }));
+					pathDescription.DebugShowPath();
 					throw;
 				}
 			}
@@ -547,10 +580,6 @@ public class FlowPassagesCanReach
 		
 		return visited;
 	}
-	bool IsInPath(Coords cell)
-	{
-		return PathCells[Board.CoordsToCellId(cell)];
-	}
 	
 	//Nearly copied from PossiblePaths... could be merged into a single service class
 //	HashSet<Coords> visited = new HashSet<Coords>();
@@ -583,7 +612,7 @@ public class FlowPassagesCanReach
 			
 			if (!visited.Contains(c)
 				//&& !Board.IsFilled(c)
-				&& !IsInPath(c))
+				&& !pathDescription.IsInPath(c))
 			{
 				yield return c;
 			}

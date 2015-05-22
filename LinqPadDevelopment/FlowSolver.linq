@@ -30,6 +30,7 @@ void Main()
 
 static bool USE_CAN_REACH_FILTERING = true;
 static bool USE_CAN_REACH_ON_ALL_PATHS = true;
+static bool USE_ORPHAN_CELLS_FILTERING = true;
 public void RunSolution()
 {
 //	var flowBoard = "---g-r-y--rb----g----by-------------";
@@ -266,6 +267,7 @@ public class PossiblePaths
 			}
 		}
 	}
+	//TODO build service that does this... doesn't seem quite a low-level as CellTranslator is
 	IEnumerable<Coords> AllNextSteps(Coords current)
 	{
 		//current.Dump();
@@ -295,7 +297,8 @@ public class PossiblePaths
 		
 		//Both are edge nodes
 		
-		var canReach = new FlowPassagesCanReach(Board, path);
+		var canReach = new FlowFilter_PassagesCanReach(Board, path);
+		var orphanedCells = new FlowFilter_OrphanCells(Board, path);
 		
 		//TODO is there a better way to get the flows at this point?
 		foreach (var flow in Board.Flows.Values)
@@ -315,6 +318,10 @@ public class PossiblePaths
 			{
 				//"filtered path".Dump();
 				//Cannot be reached, this path blocks other flows completely, return false
+				return false;
+			}
+			if (USE_ORPHAN_CELLS_FILTERING && orphanedCells.IsFiltered())
+			{
 				return false;
 			}
 		}
@@ -496,9 +503,10 @@ public class PathDescription
 		renderer.Render(6, 6, new [] { new FlowPath('a', Path) });
 	}
 }
-public class FlowPassagesCanReach
+public class FlowFilter_PassagesCanReach : FlowFilterBase
 {
-	public FlowPassagesCanReach(BoardMask board, IList<Coords> path)
+	public FlowFilter_PassagesCanReach(BoardMask board, IList<Coords> path)
+		: base(board.Width, board.Height)
 	{
 		Board = board;
 		
@@ -510,6 +518,7 @@ public class FlowPassagesCanReach
 	PathDescription pathDescription;
 	Dictionary<Coords, HashSet<Coords>> DynamicProgrammingLookup = new Dictionary<Coords, HashSet<Coords>>();
 	
+	//TODO rename this to IsFiltered?
 	public bool CanBeReached(FlowEndpoint flow)
 	{
 		return GetTouchingCells(flow.Start).Contains(flow.End);
@@ -602,36 +611,81 @@ public class FlowPassagesCanReach
 //		return visited;
 //	}
 	
+	//TODO also in PossiblePaths... add a Func<Coords, bool> for filtering them?
 	IEnumerable<Coords> NextSteps(HashSet<Coords> visited, Coords current)
+	{
+		Func<Coords, bool> shouldInclude = c => (!visited.Contains(c)
+			//&& !Board.IsFilled(c)
+			&& !pathDescription.IsInPath(c));
+		return FilteredNextSteps(current, shouldInclude);
+	}
+}
+public class FlowFilter_OrphanCells : FlowFilterBase
+{
+	public FlowFilter_OrphanCells(BoardMask board, IList<Coords> path)
+		: base(board.Width, board.Height)
+	{
+		pathDescription = new PathDescription(path, board.Width, board.Height);
+	}
+	
+	readonly PathDescription pathDescription;
+	
+	public bool IsFiltered()
+	{
+		//So only return if its not in path, and not going off the edge.
+		//  Will be zero Coords returned if a cell is totally blocked off
+		Func<Coords, bool> shouldInclude = c => !pathDescription.IsInPath(c);
+		
+		var cannotBeOrphaned = AllBoardCoords().Where(x => !pathDescription.IsInPath(x));
+		return cannotBeOrphaned.Any(x => !FilteredNextSteps(x, shouldInclude).Any());
+	}
+	
+	///All of the coordinates on the board, INCLUDING endpoint ones
+	IEnumerable<Coords> AllBoardCoords()
+	{
+		for (int x = 0; x < Width; ++x)
+			for (int y = 0; y < Height; ++y)
+				yield return new Coords(x, y);
+	}
+}
+public abstract class FlowFilterBase
+{
+	public FlowFilterBase(int boardWidth, int boardHeight)
+	{
+		Width = boardWidth;
+		Height = boardHeight;
+	}
+	
+	public readonly int Width;
+	public readonly int Height;
+	
+	//TODO also in PossiblePaths... as just NextSteps
+	protected IEnumerable<Coords> FilteredNextSteps(Coords current, Func<Coords, bool> shouldInclude)
 	{
 		foreach (var c in AllNextSteps(current))
 		{
-			//c.Dump("step");
-			//End.Dump("end");
-			//Util.HorizontalRun(true, c.Equals(End), !visited.Contains(c), !Board.IsFilled(c)).Dump("compare");
-			
-			if (!visited.Contains(c)
-				//&& !Board.IsFilled(c)
-				&& !pathDescription.IsInPath(c))
+			if (shouldInclude(c))
 			{
 				yield return c;
 			}
 		}
 	}
-	IEnumerable<Coords> AllNextSteps(Coords current)
+	
+	//TODO this also exists in PossiblePaths
+	protected IEnumerable<Coords> AllNextSteps(Coords current)
 	{
 		//current.Dump();
 		//West
 		if (current.X > 0)
 			yield return new Coords(current.X - 1, current.Y);
 		//East
-		if (current.X < Board.Width-1)
+		if (current.X < Width-1)
 			yield return new Coords(current.X + 1, current.Y);
 		//North
 		if (current.Y > 0)
 			yield return new Coords(current.X, current.Y - 1);
 		//South
-		if (current.Y < Board.Height-1)
+		if (current.Y < Height-1)
 			yield return new Coords(current.X, current.Y + 1);
 	}
 }

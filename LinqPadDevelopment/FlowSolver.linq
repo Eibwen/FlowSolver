@@ -28,6 +28,8 @@ void Main()
 	//  color count
 }
 
+static bool USE_CAN_REACH_FILTERING = true;
+static bool USE_CAN_REACH_ON_ALL_PATHS = true;
 public void RunSolution()
 {
 //	var flowBoard = "---g-r-y--rb----g----by-------------";
@@ -48,6 +50,14 @@ public void RunSolution()
 	//6x6 Mania, 110
 	var flowBoard = "brbogy-------r----------go---------y";
 	var board = new BoardMask(6, 6, flowBoard);
+	
+//	//6x6 Mania, 108
+//	var flowBoard = "byg c     g       o  cm  by r  or m ";
+//	var board = new BoardMask(6, 6, flowBoard);
+
+//	//6x6 Mania, 111
+//	var flowBoard = "b-----r---g--------gbr--------------";
+//	var board = new BoardMask(6, 6, flowBoard);
 	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
@@ -278,8 +288,9 @@ public class PossiblePaths
 	{
 		//For now, eventually IsEdgeNode will find more paths
 		//TODO above thing
-		if (!IsEdgeNode(start)
-			|| !IsEdgeNode(end))
+		if (!USE_CAN_REACH_ON_ALL_PATHS
+			&& (!IsEdgeNode(start)
+			|| !IsEdgeNode(end)))
 			return true;
 		
 		//Both are edge nodes
@@ -300,7 +311,7 @@ public class PossiblePaths
 			}
 			
 			
-			if (!canReach.CanBeReached(flow))
+			if (USE_CAN_REACH_FILTERING && !canReach.CanBeReached(flow))
 			{
 				//"filtered path".Dump();
 				//Cannot be reached, this path blocks other flows completely, return false
@@ -481,7 +492,24 @@ public class FlowPassagesCanReach
 			var cellGroup = FindTouchingCoords(cell);
 			foreach (var neighbor in cellGroup)
 			{
-				DynamicProgrammingLookup.Add(neighbor, cellGroup);
+				try
+				{
+					DynamicProgrammingLookup.Add(neighbor, cellGroup);
+					
+					//var renderer = new FlowRenderer();
+					//renderer.Render(6, 6, new [] { new FlowPath('a', cellGroup) });
+				}
+				catch
+				{
+					cell.Dump("Starting from cell");
+					neighbor.Dump();
+					cellGroup.Dump();
+					//DynamicProgrammingLookup.Dump();
+					var renderer = new FlowRenderer();
+					 renderer.Render(6, 6, new [] { new FlowPath('a', Path) });
+					DynamicProgrammingLookup.Values.Each(x => renderer.Render(6, 6, new [] { new FlowPath('a', x) }));
+					throw;
+				}
 			}
 			
 			return cellGroup;

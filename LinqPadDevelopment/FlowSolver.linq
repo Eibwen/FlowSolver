@@ -847,11 +847,14 @@ public class FlowSolver : DancingLinks
 		{
 			Columns[i].Name = "cell" + i;
 		}
+//		for (int i = 0; i < Board.ColorCount; ++i)
+//		{
+//			Columns[cells + i].Name = "color" + i;
+//		}
 		for (int i = 0; i < Board.ColorCount; ++i)
 		{
-			//TODO put the path in this?
-			//aa
-			Columns[cells + i].Name = "color" + i;
+			var flowChar = Board.Flows.ToList()[i];
+			Columns[cells + i].Name = "color" + flowChar;
 		}
 	}
 	
@@ -914,7 +917,8 @@ public class FlowSolver : DancingLinks
 			{
 				if (buildingPath.Count > 0)
 				{
-					yield return new FlowPath(colorString[5], buildingPath);
+					var flowChar = colorString[5];
+					yield return new FlowPath(flowChar, Board.FlowColorFinder.GetColor(flowChar), buildingPath);
 					buildingPath = new List<Coords>();
 				}
 				colorString = p;
@@ -924,7 +928,8 @@ public class FlowSolver : DancingLinks
 			var c = Board.CellIdToCoords(Int32.Parse(p.Replace("cell", "")));
 			buildingPath.Add(c);
 		}
-		yield return new FlowPath(colorString[5], buildingPath);
+		var flowChar2 = colorString[5];
+		yield return new FlowPath(flowChar2, Board.FlowColorFinder.GetColor(flowChar2), buildingPath);
 	}
 	
 	public void DrawBoard()
@@ -1018,14 +1023,14 @@ public class FlowColorFinder
 		for (int i = flowsHere.Count-1; i >= 0; --i)
 		{
 			var f = flowsHere[i];
-			Color found = null;
+			Color? found = null;
 			if (FlowKnownColors.ContainsKey(f))
 				found = FlowKnownColors[f];
 			
-			if (found != null)
+			if (found.HasValue)
 			{
-				FlowColorLookup.Add(f, found);
-				UsedColors.Add(found);
+				FlowColorLookup.Add(f, found.Value);
+				UsedColors.Add(found.Value);
 				flowsHere.RemoveAt(i);
 			}
 		}
@@ -1095,6 +1100,12 @@ public class FlowColorFinder
 	}
 	
 	public Color GetColor(char flow)
+	{
+		var c = GetColor_determine(flow);
+		Util.HorizontalRun(true, flow, c.Name).Dump();
+		return c;
+	}
+	Color GetColor_determine(char flow)
 	{
 		if (FlowColorLookup.ContainsKey(flow))
 			return FlowColorLookup[flow];

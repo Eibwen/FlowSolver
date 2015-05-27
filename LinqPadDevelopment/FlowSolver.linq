@@ -10,8 +10,17 @@
 //  Edge following... postit note idea for that
 //     Edge following pre-processor, IF it CAN follow an edge, only keep paths that cover all those edges
 //     BUT do need to keep any that fit that, which could be multiple, idealy order by minimums too
+//     CONCLUSION: probably not worth it, because all this does is sort the possible paths in a column... this would be wanted for a logic solver
 //  Find single lines enclosed by a path (>7 cells taken out of 8)
 //  Order by minimum lengths... is it that already? should be breath-first
+//  If a endpoint is the only endpoint who can get to a square, MUST be one of those paths
+//     Very common, any U shapes around a square next to corner or anything
+//     Also "------y--y-g..."
+//     i.e. one way to do it anyway...  For each dancing links cell column, if all the rows in that column are only one endpoint pair, any paths of that endpoint pair that are not in that column are impossible
+//  Foreach cell that is not in singlular path and not an endpoint, must have 2 sides open?
+//  DONE-Foreach cell that is not in a singular path, must have at least 1 side open
+//  Foreach singular path, each endpoint other than current path, must have at least 1 side open (redundant with above?)
+//    -i.e. If a path blocks off ALL of the 4 NSWE for another endpoint
 
 //#define STACKON
 
@@ -41,6 +50,16 @@ List<string> SampleBoards = new List<string>
 	"b--------g---------o-y-------b-----r-g----y-----------o--------r", //Extreme 23, haven't gotten solution
 	"---------b---------g---------------r------b-----y------------gyr", //Extreme 22
 	"o-----yco------y-b-g--g---r----------b----c-----r", //7x7 53
+	"---------y-gr---b-----y---------r--gb------------", //7x7 96, multiple solutions?
+	"--ogy-y-b--------b-rc------r--g--o------c--------", //7x7 101, maybe could make "Only I can Go here" filter algorithm
+	"--------------b-g------y-g---br-y---------r------", //7x7 111, many options to consider
+	"o--o-----c--b---r-b------yc--r-y----g---------g--", //7x7 115
+	"---gy-----------y-b--g-r------------b---r--------", //7x7 117
+	"rg----------g-----b-------------------y--y-r----b", //7x7 130
+	"--g-----o--c----grb---or-----yc-b----y-----------", //7x7 
+	"---------g--c--go----oc--y--r-r---------b-by----- ", //7x7 149
+	"----------ybg---o-------------------------------ry---r-o----g-b------------------", //Extreme 9x9 20
+	
 };
 
 public BoardMask LoadBoard(int index)
@@ -853,7 +872,7 @@ public class FlowSolver : DancingLinks
 //		}
 		for (int i = 0; i < Board.ColorCount; ++i)
 		{
-			var flowChar = Board.Flows.ToList()[i];
+			var flowChar = Board.Flows.ToList()[i].Key;
 			Columns[cells + i].Name = "color" + flowChar;
 		}
 	}
@@ -918,7 +937,7 @@ public class FlowSolver : DancingLinks
 				if (buildingPath.Count > 0)
 				{
 					var flowChar = colorString[5];
-					yield return new FlowPath(flowChar, Board.FlowColorFinder.GetColor(flowChar), buildingPath);
+					yield return new FlowPath(flowChar, buildingPath);
 					buildingPath = new List<Coords>();
 				}
 				colorString = p;
@@ -929,7 +948,7 @@ public class FlowSolver : DancingLinks
 			buildingPath.Add(c);
 		}
 		var flowChar2 = colorString[5];
-		yield return new FlowPath(flowChar2, Board.FlowColorFinder.GetColor(flowChar2), buildingPath);
+		yield return new FlowPath(flowChar2, buildingPath);
 	}
 	
 	public void DrawBoard()
@@ -941,15 +960,13 @@ public class FlowSolver : DancingLinks
 }
 public class FlowPath
 {
-	public FlowPath(char flow, Color color, IEnumerable<Coords> path)
+	public FlowPath(char flow, IEnumerable<Coords> path)
 	{
 		Flow = flow;
-		Color = color;
 		Path = path;
 	}
 	
 	public char Flow { get; private set; }
-	public Color Color { get; private set; }
 	public IEnumerable<Coords> Path { get; private set; }
 }
 

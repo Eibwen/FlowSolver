@@ -29,7 +29,6 @@ void Main()
 }
 
 static bool USE_CAN_REACH_FILTERING = true;
-static bool USE_CAN_REACH_ON_ALL_PATHS = true;
 static bool USE_ORPHAN_CELLS_FILTERING = true;
 public void RunSolution()
 {
@@ -59,6 +58,10 @@ public void RunSolution()
 	//6x6 Mania, 111
 	var flowBoard = "b-----r---g--------gbr--------------";
 	var board = new BoardMask(6, 6, flowBoard);
+	
+//	//9x9 extreme
+//	var flowBoard = "----------ybg---o-------------------------------ry---r-o----g-b------------------";
+//	var board = new BoardMask(9, 9, flowBoard);
 	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
@@ -288,18 +291,10 @@ public class PossiblePaths
 	
 	bool CountAsValidPath_OtherCanBeReached(Coords start, Coords end, IList<Coords> path)
 	{
-		//For now, eventually IsEdgeNode will find more paths
-		//TODO above thing
-		if (!USE_CAN_REACH_ON_ALL_PATHS
-			&& (!IsEdgeNode(start)
-			|| !IsEdgeNode(end)))
-			return true;
-		
-		//Both are edge nodes
-		
 		var canReach = new FlowFilter_PassagesCanReach(Board, path);
 		var orphanedCells = new FlowFilter_OrphanCells(Board, path);
 		
+		//TODO THIS SHOULD GO INSIDE OF canReach.IsFiltered()
 		//TODO is there a better way to get the flows at this point?
 		foreach (var flow in Board.Flows.Values)
 		{
@@ -320,30 +315,32 @@ public class PossiblePaths
 				//Cannot be reached, this path blocks other flows completely, return false
 				return false;
 			}
-			if (USE_ORPHAN_CELLS_FILTERING && orphanedCells.IsFiltered())
-			{
-				return false;
-			}
 		}
+		
+		if (USE_ORPHAN_CELLS_FILTERING && orphanedCells.IsFiltered())
+		{
+			return false;
+		}
+		
 		//Everyone passes the tests here
 		return true;
 	}
 
 	
-	bool IsEdgeNode(Coords current)
-	{
-		//TODO also check if routes around it are blocked, and consider the edge node endpoints to be those
-		//  Note DO NOT count the same color then...
-		
-		//fuck, find all the endpoints
-		//  find where this line crosses it
-		//  and the other endpoint should cross each line/column on the same way
-		
-		return current.Y == 0
-			|| current.Y == Board.Height-1
-			|| current.X == 0
-			|| current.X == Board.Width-1;
-	}
+//	bool IsEdgeNode(Coords current)
+//	{
+//		//TODO also check if routes around it are blocked, and consider the edge node endpoints to be those
+//		//  Note DO NOT count the same color then...
+//		
+//		//fuck, find all the endpoints
+//		//  find where this line crosses it
+//		//  and the other endpoint should cross each line/column on the same way
+//		
+//		return current.Y == 0
+//			|| current.Y == Board.Height-1
+//			|| current.X == 0
+//			|| current.X == Board.Width-1;
+//	}
 }
 public class BoardMask : CellTranslator
 {
@@ -739,8 +736,12 @@ public class FlowSolver : DancingLinks
 	
 	public void BuildTableFull()
 	{
-		foreach (var paths in PathsGenerators)
+		var generators = PathsGenerators.ToList();
+		var totalCount = generators.Count;
+		var current = 0;
+		foreach (var paths in generators)
 		{
+			Util.Progress = current * 100 / generators.Count;
 //			foreach (var DLCellList in paths.FindPaths()
 //										.Select(x => BuildDancingLinksRow(x)))
 			foreach (var DLCellList in BuildDancingLinksRow(paths))
@@ -750,6 +751,7 @@ public class FlowSolver : DancingLinks
 		}
 		
 		EnumeratePath(HEAD, (f) => f.East).Cast<DancingLinkHeader>().Select(x => x.Count).Dump("Column counts");
+		Util.Progress = null;
 	}
 	
 	private bool OutputSolution(IEnumerable<DancingLinkNode> solution)

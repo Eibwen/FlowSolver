@@ -910,30 +910,41 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 	void FilterColorColumns(DancingLinkHeader column)
 	{
 		int totalCount = column.Count;
-		var cellLookup = new Dictionary<DancingLinkNode, int>();
+		var cellLookup = new Dictionary<DancingLinkHeader, int>();
+		var cellTokeepLookup = new Dictionary<DancingLinkHeader, List<DancingLinkNode>>();
 		
-		Action<DancingLinkNode> incrementCellName = x =>
+		Action<DancingLinkHeader, DancingLinkNode> incrementCellName = (x, y) =>
 		{
 			if (cellLookup.ContainsKey(x))
+			{
 				cellLookup[x]++;
-			cellLookup.Add(x, 1);
+				cellTokeepLookup[x].Add(y);
+			}
+			else
+			{
+				cellLookup.Add(x, 1);
+				cellTokeepLookup.Add(x, y);
+			}
 		};
 		
 		foreach (var colRow in DancingLinks.EnumeratePath(column, x => x.South))
 		{
 			foreach (var cell in DancingLinks.EnumeratePath(colRow, x => x.West))
 			{
-				incrementCellName(cell);
+				incrementCellName(cell.Header, cell);
 			}
 		}
 		
 		//Now to check if any are always used
-		var cellsToCleanout = new List<DancingLinkNode>();
+		var cellsToCleanout = new List<DancingLinkHeader>();
+		//Lazy collection here...
+		var allCellsToKeep = new HashSet<DancingLinkNode>();
 		foreach (var kvp in cellLookup)
 		{
 			if (kvp.Value == totalCount)
 			{
 				cellsToCleanout.Add(kvp.Key);
+				allCellsToKeep.AddRange(cellTokeepLookup[kvp.Key]);
 				("Cleaning up color column: " + kvp.Key.Header.Name).Dump();
 			}
 			else
@@ -946,6 +957,18 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 		foreach (var cellColumn in cellsToCleanout)
 		{
 			//TODO idk what to do here now...
+			//Um... go south and find any that DO NOT exist in allCellsToKeep?
+			foreach (var toRemove in DancingLinks.EnumeratePath(cellColumn, x => x.South))
+			{
+				if (!allCellsToKeep.Contains(toRemove))
+				{
+					"remove this row".Dump();
+				}
+				else
+				{
+					"keeping this row".Dump();
+				}
+			}
 		}
 	}
 }

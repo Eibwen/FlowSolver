@@ -6,6 +6,12 @@
 </Query>
 
 //TODO support bridges
+//TODO Enhancements:
+//  Edge following... postit note idea for that
+//     Edge following pre-processor, IF it CAN follow an edge, only keep paths that cover all those edges
+//     BUT do need to keep any that fit that, which could be multiple, idealy order by minimums too
+//  Find single lines enclosed by a path (>7 cells taken out of 8)
+//  Order by minimum lengths... is it that already? should be breath-first
 
 //#define STACKON
 
@@ -26,6 +32,22 @@ void Main()
 	//So dancing links columns are:
 	//  cells (height * width)
 	//  color count
+}
+
+List<string> SampleBoards = new List<string>
+{
+	"---g-r-y--rb----g----by-------------",
+	"b---------------y---ygr--g-r-----b--",
+	"b--------g---------o-y-------b-----r-g----y-----------o--------r", //Extreme 23, haven't gotten solution
+	"---------b---------g---------------r------b-----y------------gyr", //Extreme 22
+	"o-----yco------y-b-g--g---r----------b----c-----r", //7x7 53
+};
+
+public BoardMask LoadBoard(int index)
+{
+	var flowBoard = SampleBoards[index];
+	int sizeSquare = (int)Math.Sqrt(flowBoard.Length);
+	return new BoardMask(sizeSquare, sizeSquare, flowBoard);
 }
 
 static bool USE_CAN_REACH_FILTERING = true;
@@ -862,11 +884,110 @@ public class FlowRenderer
 			b.Dump();
 		}
 	}
+}
+public class FlowColorFinder
+{
+	public FlowColorFinder(IEnumerable<FlowEndpoint> flows)
+		: this(flows.Select(x => x.Flow))
+	{
+	}
+	public FlowColorFinder(IEnumerable<FlowPath> flows)
+		: this(flows.Select(x => x.Flow))
+	{
+	}
+	public FlowColorFinder(IEnumerable<char> flows)
+	{
+		//TODO pattern detection
+		//  Contains all: rgby
+		//  Sort, starts with abc
+		//  Sort. starts with 123
+		
+		var flowsHere = flows.ToList();
+		
+		for (int i = flowsHere.Count-1; i >= 0; --i)
+		{
+			var f = flowsHere[i];
+			Color found = null;
+			if (FlowKnownColors.ContainsKey(f))
+				found = FlowKnownColors[f];
+			
+			if (found != null)
+			{
+				FlowColorLookup.Add(f, found);
+				UsedColors.Add(found);
+				flowsHere.RemoveAt(i);
+			}
+		}
+		
+		//Any leftovers...
+		var unusedColors = new Queue<Color>(ColorOrder.Except(UsedColors));
+		for (int i = 0; i < flowsHere.Count;)
+		{
+			var f = flowsHere[i];
+			if (unusedColors.Count > 0)
+			{
+				var found = unusedColors.Dequeue();
+				FlowColorLookup.Add(f, found);
+				UsedColors.Add(found);
+				flowsHere.RemoveAt(i);
+			}
+			else
+				break;
+		}
+		
+		//Random colors
+		foreach (var f in flowsHere)
+		{
+			var found = GetRandomColor();
+			FlowColorLookup.Add(f, found);
+			UsedColors.Add(found);
+		}
+	}
+	
+	Dictionary<char, Color> FlowColorLookup = new Dictionary<char, Color>();
+	HashSet<Color> UsedColors = new HashSet<Color>();
+	
 	
 	Random rand = new Random();
-	Color GetColor(char flow)
+	Dictionary<char, Color> FlowKnownColors = new Dictionary<char, Color>
+	{
+		{ 'r', Color.Red },
+		{ 'g', Color.Green },
+		{ 'b', Color.Blue },
+		{ 'y', Color.Yellow },
+		{ 'o', Color.Orange },
+		{ 'c', Color.Cyan },
+		{ 'm', Color.Magenta },
+		{ 'p', Color.Purple },
+		{ 'w', Color.GhostWhite },
+		//{ '', Color.Gray },
+		{ 'l', Color.LimeGreen },
+		//{ '', Color. },
+	};
+	Color[] ColorOrder = new []
+	{
+		//Unknown order:
+		Color.Red,
+		Color.Green,
+		Color.Blue,
+		Color.Yellow,
+		Color.Orange, //4th
+		Color.Cyan,
+		Color.Magenta,
+		Color.Purple,
+		Color.GhostWhite,
+		Color.Gray
+	};
+	Color GetRandomColor()
 	{
 		return Color.FromArgb(rand.Next(256), rand.Next(256), rand.Next(256));
+	}
+	
+	public Color GetColor(char flow)
+	{
+		if (FlowColorLookup.ContainsKey(flow))
+			return FlowColorLookup[flow];
+		return GetRandomColor();
 	}
 }
 

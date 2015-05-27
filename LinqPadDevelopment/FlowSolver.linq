@@ -47,6 +47,10 @@ List<string> SampleBoards = new List<string>
 {
 	"---g-r-y--rb----g----by-------------",
 	"b---------------y---ygr--g-r-----b--",
+	"byg-c-----g-------o--cm--by-r--or-m-", //6x6 Mania, 108, not a good test board...
+	"brbogy-------r----------go---------y", //6x6 Mania, 110
+	"b-----r---g--------gbr--------------", //6x6 Mania, 111
+	
 	"b--------g---------o-y-------b-----r-g----y-----------o--------r", //Extreme 23, haven't gotten solution
 	"---------b---------g---------------r------b-----y------------gyr", //Extreme 22
 	"o-----yco------y-b-g--g---r----------b----c-----r", //7x7 53
@@ -73,37 +77,6 @@ static bool USE_CAN_REACH_FILTERING = true;
 static bool USE_ORPHAN_CELLS_FILTERING = true;
 public void RunSolution()
 {
-//	var flowBoard = "---g-r-y--rb----g----by-------------";
-//	var board = new BoardMask(6, 6, flowBoard);
-	//var flowBoard = "b-b-"; //WORKS, pretty sure
-	//var board = new BoardMask(2, 2, flowBoard);
-//	var flowBoard = "b-------b"; //WORKS
-//	var board = new BoardMask(3, 3, flowBoard);
-	//var flowBoard = "a-ab----b";
-	//var board = new BoardMask(3, 3, flowBoard);
-	
-//	//6x6 Mania, 108, not a good test board...
-//	//  Well it is good for ones where ALL are valid, since the one with edge endpoints only has one possible path
-//	//  But not good cause its only in one corner
-//	var flowBoard = "byg-c-----g-------o--cm--by-r--or-m-";
-//	var board = new BoardMask(6, 6, flowBoard);
-
-//	//6x6 Mania, 110
-//	var flowBoard = "brbogy-------r----------go---------y";
-//	var board = new BoardMask(6, 6, flowBoard);
-	
-//	//6x6 Mania, 108
-//	var flowBoard = "byg c     g       o  cm  by r  or m ";
-//	var board = new BoardMask(6, 6, flowBoard);
-
-	//6x6 Mania, 111
-	var flowBoard = "b-----r---g--------gbr--------------";
-	var board = new BoardMask(6, 6, flowBoard);
-	
-//	//9x9 extreme
-//	var flowBoard = "----------ybg---o-------------------------------ry---r-o----g-b------------------";
-//	var board = new BoardMask(9, 9, flowBoard);
-	
 	var board = LoadBoard(2);
 	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
@@ -598,6 +571,8 @@ public class FlowEndpoint
 	public readonly Coords Start;
 	public Coords End { get; private set; }
 	
+	public Color Color { get; set; }
+	
 	public void SetEnd(Coords coords)
 	{
 		End = coords;
@@ -923,7 +898,7 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 			else
 			{
 				cellLookup.Add(x, 1);
-				cellTokeepLookup.Add(x, y);
+				cellTokeepLookup.Add(x, new List<DancingLinkNode> { y });
 			}
 		};
 		
@@ -944,7 +919,8 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 			if (kvp.Value == totalCount)
 			{
 				cellsToCleanout.Add(kvp.Key);
-				allCellsToKeep.AddRange(cellTokeepLookup[kvp.Key]);
+				//allCellsToKeep.AddRange(cellTokeepLookup[kvp.Key]);
+				cellTokeepLookup[kvp.Key].Each(x => allCellsToKeep.Add(x));
 				("Cleaning up color column: " + kvp.Key.Header.Name).Dump();
 			}
 			else

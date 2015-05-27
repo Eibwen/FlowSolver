@@ -85,6 +85,8 @@ public void RunSolution()
 //	var flowBoard = "----------ybg---o-------------------------------ry---r-o----g-b------------------";
 //	var board = new BoardMask(9, 9, flowBoard);
 	
+	var board = LoadBoard(2);
+	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
 	var solver = new FlowSolver(board, pathsGenerators);
@@ -363,6 +365,96 @@ public class PossiblePaths
 //			|| current.X == 0
 //			|| current.X == Board.Width-1;
 //	}
+	
+	
+	public bool CountAsValidPath_EnclosedCell(IList<Coords> path)
+	{
+		//TODO build a more limited board mask...
+		var maxCellId = Board.Width * Board.Height;
+		var pathMask = new BitArray(maxCellId);
+		//TODO do I want to mark other flows too?
+		//  At least probably don't want to examine their neighbors
+		foreach (var p in path)
+		{
+			pathMask[Board.CoordsToCellId(p)] = true;
+		}
+		
+		//OPTION1
+		Func<Coords, int, int, Coords> CoordsOffset = (cell, xOffset, yOffset) =>
+			{
+				return new Coords(cell.X + xOffset, cell.Y + yOffset);
+			};
+		Func<Coords, bool> CellEmpty = cell =>
+			!pathMask[Board.CoordsToCellId(cell)]
+				&& !Board.IsFilled(cell);
+		Func<Coords, int> EmptyNeighborsCount = cell =>
+			{
+				var count = 0;
+				if (CellEmpty(CoordsOffset(cell, -1, -1))) ++count;
+				if (CellEmpty(CoordsOffset(cell, 0, -1))) ++count;
+				if (CellEmpty(CoordsOffset(cell, 1, -1))) ++count;
+				if (CellEmpty(CoordsOffset(cell, 1, 0))) ++count;
+				if (CellEmpty(CoordsOffset(cell, 1, 1))) ++count;
+				if (CellEmpty(CoordsOffset(cell, 0, 1))) ++count;
+				if (CellEmpty(CoordsOffset(cell, -1, 1))) ++count;
+				if (CellEmpty(CoordsOffset(cell, -1, 0))) ++count;
+				
+				return count;
+			};
+		//OPTION2
+		Func<Coords, bool, bool> IsIncompatableArrangement = (cell, isEndpoint) =>
+			{
+				var N = CellEmpty(CoordsOffset(cell, 0, -1));
+				var E = CellEmpty(CoordsOffset(cell, 1, 0));
+				var S = CellEmpty(CoordsOffset(cell, 0, 1));
+				var W = CellEmpty(CoordsOffset(cell, -1, 0));
+				
+				var squareDirections = 0;
+				if (N) ++squareDirections;
+				if (S) ++squareDirections;
+				if (W) ++squareDirections;
+				if (E) ++squareDirections;
+				
+				//All directions blocked
+				//if (!N && !S && !W && !E)
+				if (squareDirections == 0)
+					return true;
+				if (squareDirections == 1 && !isEndpoint)
+				{
+					return true;
+				}
+				return false;
+				
+				//var NW = CellEmpty(CoordsOffset(cell, -1, -1)),
+				//	NE = CellEmpty(CoordsOffset(cell, 1, -1)),
+				//	SE = CellEmpty(CoordsOffset(cell, 1, 1)),
+				//	SW = CellEmpty(CoordsOffset(cell, -1, 1)),
+			};
+		
+		for (int i = 0; i < maxCellId; ++i)
+		{
+			//Include endpoints, but not the path itself
+			if (pathMask[i])
+				continue;
+			
+			var emptyNeighbors = EmptyNeighborsCount(Board.CellIdToCoords(i));
+			
+			//Single cell... impossible
+			if (emptyNeighbors == 0)
+				return false;
+			if (emptyNeighbors == 1)
+			{
+				//TODO check if IS an endpoint
+			}
+//			if (emptyNeighbors == 2)
+//			{
+//				//Not worth checking maybe???
+//			}
+		}
+		
+		//Plenty of empty cells
+		return true;
+	}
 }
 public class BoardMask : CellTranslator
 {
@@ -372,6 +464,8 @@ public class BoardMask : CellTranslator
 		Width = width;
 		Height = height;
 		_array = new BitArray(Width * Height);
+		
+		FlowColorFinder = new FlowColorFinder();
 	}
 	
 	public BoardMask(int width, int height, string boardDescription)
@@ -395,6 +489,8 @@ public class BoardMask : CellTranslator
 	
 	public Dictionary<char, FlowEndpoint> Flows { get; private set; }
 	BitArray _array;
+	
+	public FlowColorFinder FlowColorFinder { get; private set; }
 	
 	char[] EmptyCellChars = new [] { '-', ' ', '_' };
 	public void LoadBoardDescription(string boardDescription)
@@ -421,6 +517,9 @@ public class BoardMask : CellTranslator
 			}
 		
 		Flows = colorChars;
+		
+		FlowColorFinder.LoadAndSetFlows(Flows);
+		
 		_boardLoaded = true;
 	}
 	
@@ -837,13 +936,15 @@ public class FlowSolver : DancingLinks
 }
 public class FlowPath
 {
-	public FlowPath(char flow, IEnumerable<Coords> path)
+	public FlowPath(char flow, Color color, IEnumerable<Coords> path)
 	{
 		Flow = flow;
+		Color = color;
 		Path = path;
 	}
 	
 	public char Flow { get; private set; }
+	public Color Color { get; private set; }
 	public IEnumerable<Coords> Path { get; private set; }
 }
 
@@ -867,7 +968,7 @@ public class FlowRenderer
 			
 			foreach (var p in paths)
 			{
-				var color = GetColor(p.Flow);
+				var color = p.Color; //GetColor(p.Flow);
 				using (var brush = new SolidBrush(color))
 				{
 					foreach (var solutionCell in p.Path)
@@ -887,15 +988,25 @@ public class FlowRenderer
 }
 public class FlowColorFinder
 {
-	public FlowColorFinder(IEnumerable<FlowEndpoint> flows)
-		: this(flows.Select(x => x.Flow))
+//	public FlowColorFinder(IEnumerable<FlowEndpoint> flows)
+//		: this(flows.Select(x => x.Flow))
+//	{
+//	}
+//	public FlowColorFinder(IEnumerable<FlowPath> flows)
+//		: this(flows.Select(x => x.Flow))
+//	{
+//	}
+	public void LoadAndSetFlows(Dictionary<char, FlowEndpoint> flows)
 	{
+		BuildColors(flows.Select(x => x.Value.Flow));
+		
+		foreach (var flow in flows)
+		{
+			flow.Value.Color = GetColor(flow.Key);
+		}
 	}
-	public FlowColorFinder(IEnumerable<FlowPath> flows)
-		: this(flows.Select(x => x.Flow))
-	{
-	}
-	public FlowColorFinder(IEnumerable<char> flows)
+	
+	void BuildColors(IEnumerable<char> flows)
 	{
 		//TODO pattern detection
 		//  Contains all: rgby

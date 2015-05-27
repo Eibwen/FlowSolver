@@ -22,6 +22,13 @@
 //  Foreach singular path, each endpoint other than current path, must have at least 1 side open (redundant with above?)
 //    -i.e. If a path blocks off ALL of the 4 NSWE for another endpoint
 
+//BUGS:
+//  Flow color finder is not working, always gets new color
+//  Flow color finder probably does not use loaded results...
+//  Not using OnlyOne filters
+//  FALSE-did this on two computers--Possibly not using EnclosedCell filter?
+
+
 //#define STACKON
 
 void Main()
@@ -45,14 +52,17 @@ void Main()
 
 List<string> SampleBoards = new List<string>
 {
+	/*0 easyish*/
 	"---g-r-y--rb----g----by-------------",
+	/*1 easy */
 	"b---------------y---ygr--g-r-----b--",
+	/*2 extremely easy*/
 	"byg-c-----g-------o--cm--by-r--or-m-", //6x6 Mania, 108, not a good test board...
+	/*3 easy*/
 	"brbogy-------r----------go---------y", //6x6 Mania, 110
+	/*4 lots of solutions*/
 	"b-----r---g--------gbr--------------", //6x6 Mania, 111
 	
-	"b--------g---------o-y-------b-----r-g----y-----------o--------r", //Extreme 23, haven't gotten solution
-	"---------b---------g---------------r------b-----y------------gyr", //Extreme 22
 	"o-----yco------y-b-g--g---r----------b----c-----r", //7x7 53
 	"---------y-gr---b-----y---------r--gb------------", //7x7 96, multiple solutions?
 	"--ogy-y-b--------b-rc------r--g--o------c--------", //7x7 101, maybe could make "Only I can Go here" filter algorithm
@@ -62,6 +72,10 @@ List<string> SampleBoards = new List<string>
 	"rg----------g-----b-------------------y--y-r----b", //7x7 130
 	"--g-----o--c----grb---or-----yc-b----y-----------", //7x7 
 	"---------g--c--go----oc--y--r-r---------b-by----- ", //7x7 149
+	
+	//CANNOT DO 8x8 still... at least not within 1 minute
+	"b--------g---------o-y-------b-----r-g----y-----------o--------r", //Extreme 23, haven't gotten solution
+	"---------b---------g---------------r------b-----y------------gyr", //Extreme 22
 	"----------ybg---o-------------------------------ry---r-o----g-b------------------", //Extreme 9x9 20
 	
 };
@@ -77,7 +91,7 @@ static bool USE_CAN_REACH_FILTERING = true;
 static bool USE_ORPHAN_CELLS_FILTERING = true;
 public void RunSolution()
 {
-	var board = LoadBoard(2);
+	var board = LoadBoard(4);
 	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
@@ -357,96 +371,6 @@ public class PossiblePaths
 //			|| current.X == 0
 //			|| current.X == Board.Width-1;
 //	}
-	
-	
-	public bool CountAsValidPath_EnclosedCell(IList<Coords> path)
-	{
-		//TODO build a more limited board mask...
-		var maxCellId = Board.Width * Board.Height;
-		var pathMask = new BitArray(maxCellId);
-		//TODO do I want to mark other flows too?
-		//  At least probably don't want to examine their neighbors
-		foreach (var p in path)
-		{
-			pathMask[Board.CoordsToCellId(p)] = true;
-		}
-		
-		//OPTION1
-		Func<Coords, int, int, Coords> CoordsOffset = (cell, xOffset, yOffset) =>
-			{
-				return new Coords(cell.X + xOffset, cell.Y + yOffset);
-			};
-		Func<Coords, bool> CellEmpty = cell =>
-			!pathMask[Board.CoordsToCellId(cell)]
-				&& !Board.IsFilled(cell);
-		Func<Coords, int> EmptyNeighborsCount = cell =>
-			{
-				var count = 0;
-				if (CellEmpty(CoordsOffset(cell, -1, -1))) ++count;
-				if (CellEmpty(CoordsOffset(cell, 0, -1))) ++count;
-				if (CellEmpty(CoordsOffset(cell, 1, -1))) ++count;
-				if (CellEmpty(CoordsOffset(cell, 1, 0))) ++count;
-				if (CellEmpty(CoordsOffset(cell, 1, 1))) ++count;
-				if (CellEmpty(CoordsOffset(cell, 0, 1))) ++count;
-				if (CellEmpty(CoordsOffset(cell, -1, 1))) ++count;
-				if (CellEmpty(CoordsOffset(cell, -1, 0))) ++count;
-				
-				return count;
-			};
-		//OPTION2
-		Func<Coords, bool, bool> IsIncompatableArrangement = (cell, isEndpoint) =>
-			{
-				var N = CellEmpty(CoordsOffset(cell, 0, -1));
-				var E = CellEmpty(CoordsOffset(cell, 1, 0));
-				var S = CellEmpty(CoordsOffset(cell, 0, 1));
-				var W = CellEmpty(CoordsOffset(cell, -1, 0));
-				
-				var squareDirections = 0;
-				if (N) ++squareDirections;
-				if (S) ++squareDirections;
-				if (W) ++squareDirections;
-				if (E) ++squareDirections;
-				
-				//All directions blocked
-				//if (!N && !S && !W && !E)
-				if (squareDirections == 0)
-					return true;
-				if (squareDirections == 1 && !isEndpoint)
-				{
-					return true;
-				}
-				return false;
-				
-				//var NW = CellEmpty(CoordsOffset(cell, -1, -1)),
-				//	NE = CellEmpty(CoordsOffset(cell, 1, -1)),
-				//	SE = CellEmpty(CoordsOffset(cell, 1, 1)),
-				//	SW = CellEmpty(CoordsOffset(cell, -1, 1)),
-			};
-		
-		for (int i = 0; i < maxCellId; ++i)
-		{
-			//Include endpoints, but not the path itself
-			if (pathMask[i])
-				continue;
-			
-			var emptyNeighbors = EmptyNeighborsCount(Board.CellIdToCoords(i));
-			
-			//Single cell... impossible
-			if (emptyNeighbors == 0)
-				return false;
-			if (emptyNeighbors == 1)
-			{
-				//TODO check if IS an endpoint
-			}
-//			if (emptyNeighbors == 2)
-//			{
-//				//Not worth checking maybe???
-//			}
-		}
-		
-		//Plenty of empty cells
-		return true;
-	}
 }
 public class BoardMask : CellTranslator
 {
@@ -749,6 +673,7 @@ public class FlowFilter_OrphanCells : FlowFilterBase
 		Func<Coords, bool> shouldInclude = c => !pathDescription.IsInPath(c);
 		
 		var cannotBeOrphaned = AllBoardCoords().Where(x => !pathDescription.IsInPath(x));
+		//TODO TODO, if it is NOT an endpoint, it MUST have at least 2?
 		return cannotBeOrphaned.Any(x => !FilteredNextSteps(x, shouldInclude).Any());
 	}
 	

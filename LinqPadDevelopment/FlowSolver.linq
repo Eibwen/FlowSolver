@@ -827,6 +827,130 @@ public abstract class FlowFilterBase
 	}
 }
 
+public class FlowFilter_PostDancingLinks_OnlyOne
+{
+	public FlowFilter_PostDancingLinks_OnlyOne(FlowSolver solver)
+	{
+		Solver = solver;
+	}
+	
+	readonly FlowSolver Solver;
+	
+	DancingLinkNode FindFlowColumn(DancingLinkNode node)
+	{
+		var sp = node;
+		while (!sp.Header.Name.ToString().StartsWith("color")) sp = sp.West;
+		
+		return sp;
+	}
+	
+	public void RunFilter()
+	{
+		foreach (var column in Solver.Columns)
+		{
+			
+		}
+	}
+	
+	void CheckGenericColumn(DancingLinkHeader column)
+	{
+		var colName = column.Name.ToString();
+		if (colName.StartsWith("cell"))
+		{
+			FilterCellColumnRows(column);
+		}
+		else if (colName.StartsWith("color"))
+		{
+			FilterColorColumns(column);
+		}
+		else
+		{
+			throw new Exception("Unknown column... wtf");
+		}
+	}
+	
+	void FilterCellColumnRows(DancingLinkHeader column)
+	{
+		DancingLinkHeader foundFlow = null;
+		var validRows = new HashSet<DancingLinkNode>();
+		foreach (var colRow in DancingLinks.EnumeratePath(column, x => x.South))
+		{
+			var flowColumn = FindFlowColumn(colRow);
+			validRows.Add(flowColumn);
+			
+			if (foundFlow == null)
+			{
+				foundFlow = flowColumn.Header;
+			}
+			else if (foundFlow != flowColumn.Header)
+			{
+				//Does not apply to this filter
+				//  that all the ones of this flow are using this cell
+				return;
+			}
+		}
+		
+		
+		//NOW find any other that are in it's column, but has no cells in validRows
+		foreach (var flowRow in DancingLinks.EnumeratePath(foundFlow, x => x.South))
+		{
+			if (!validRows.Contains(flowRow))
+			{
+				//Remove this row!
+				"Remove this row!".Dump();
+			}
+			else
+			{
+				//Do not remove
+				"NOT removing row".Dump();
+			}
+		}
+	}
+	
+	void FilterColorColumns(DancingLinkHeader column)
+	{
+		int totalCount = column.Count;
+		var cellLookup = new Dictionary<DancingLinkNode, int>();
+		
+		Action<DancingLinkNode> incrementCellName = x =>
+		{
+			if (cellLookup.ContainsKey(x))
+				cellLookup[x]++;
+			cellLookup.Add(x, 1);
+		};
+		
+		foreach (var colRow in DancingLinks.EnumeratePath(column, x => x.South))
+		{
+			foreach (var cell in DancingLinks.EnumeratePath(colRow, x => x.West))
+			{
+				incrementCellName(cell);
+			}
+		}
+		
+		//Now to check if any are always used
+		var cellsToCleanout = new List<DancingLinkNode>();
+		foreach (var kvp in cellLookup)
+		{
+			if (kvp.Value == totalCount)
+			{
+				cellsToCleanout.Add(kvp.Key);
+				("Cleaning up color column: " + kvp.Key.Header.Name).Dump();
+			}
+			else
+			{
+				"NOT cleaning up color column".Dump();
+			}
+		}
+		
+		//And remove any OTHER flows from this cell
+		foreach (var cellColumn in cellsToCleanout)
+		{
+			//TODO idk what to do here now...
+		}
+	}
+}
+
+
 
 
 public class FlowSolver : DancingLinks
@@ -974,6 +1098,9 @@ public class FlowRenderer
 {
 	public void Render(int cellColumns, int cellRows, IEnumerable<FlowPath> paths)
 	{
+		//TODO do this better... pass in from board??
+		var colorFinder = new FlowColorFinder();
+		
 		var width = 200;
 		var height = 200;
 		var padding = 2;
@@ -990,7 +1117,7 @@ public class FlowRenderer
 			
 			foreach (var p in paths)
 			{
-				var color = p.Color; //GetColor(p.Flow);
+				var color = colorFinder.GetColor(p.Flow); //GetColor(p.Flow);
 				using (var brush = new SolidBrush(color))
 				{
 					foreach (var solutionCell in p.Path)

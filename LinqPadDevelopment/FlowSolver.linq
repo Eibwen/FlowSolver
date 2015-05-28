@@ -21,10 +21,11 @@
 //  DONE-Foreach cell that is not in a singular path, must have at least 1 side open
 //  Foreach singular path, each endpoint other than current path, must have at least 1 side open (redundant with above?)
 //    -i.e. If a path blocks off ALL of the 4 NSWE for another endpoint
+//  PossiblePaths could be generated in parallel, on multiple threads
 
 //BUGS:
-//  Flow color finder is not working, always gets new color
-//  Flow color finder probably does not use loaded results...
+//  FIXED--Flow color finder is not working, always gets new color
+//  FIXED--Flow color finder probably does not use loaded results...
 //  Not using OnlyOne filters
 //  FALSE-did this on two computers--Possibly not using EnclosedCell filter?
 
@@ -91,7 +92,7 @@ static bool USE_CAN_REACH_FILTERING = true;
 static bool USE_ORPHAN_CELLS_FILTERING = true;
 public void RunSolution()
 {
-	var board = LoadBoard(4);
+	var board = LoadBoard(1);
 	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
@@ -584,7 +585,7 @@ public class FlowFilter_PassagesCanReach : FlowFilterBase
 					cellGroup.Dump();
 					//DynamicProgrammingLookup.Dump();
 					var renderer = new FlowRenderer();
-					DynamicProgrammingLookup.Values.Each(x => renderer.Render(6, 6, new [] { new FlowPath('a', x) }));
+					DynamicProgrammingLookup.Values.Each(x => renderer.Render(6, 6, new [] { new FlowPath('a', x) }, Board.FlowColorFinder));
 					pathDescription.DebugShowPath();
 					throw;
 				}
@@ -932,7 +933,7 @@ public class FlowSolver : DancingLinks
 		var current = 0;
 		foreach (var paths in generators)
 		{
-			Util.Progress = current * 100 / generators.Count;
+			Util.Progress = current++ * 100 / generators.Count;
 //			foreach (var DLCellList in paths.FindPaths()
 //										.Select(x => BuildDancingLinksRow(x)))
 			foreach (var DLCellList in BuildDancingLinksRow(paths))
@@ -941,7 +942,10 @@ public class FlowSolver : DancingLinks
 			}
 		}
 		
-		EnumeratePath(HEAD, (f) => f.East).Cast<DancingLinkHeader>().Select(x => x.Count).Dump("Column counts");
+		var columnCounts = EnumeratePath(HEAD, (f) => f.East).Cast<DancingLinkHeader>().Select(x => x.Count);
+		columnCounts.Dump("Column counts");
+		columnCounts.RootMeanSquare(x => x).Dump("RMS of Column Count");
+		
 		Util.Progress = null;
 	}
 	
@@ -951,7 +955,7 @@ public class FlowSolver : DancingLinks
 		var paths = FlowSplitter(pathStrings);
 		
 		var renderer = new FlowRenderer();
-		renderer.Render(Board.Width, Board.Height, paths);
+		renderer.Render(Board.Width, Board.Height, paths, Board.FlowColorFinder);
 		
 		//Always return true here... get all solutions
 		return true;
@@ -1003,7 +1007,7 @@ public class FlowSolver : DancingLinks
 	{
 		var renderer = new FlowRenderer();
 		renderer.Render(Board.Width, Board.Height,
-			Board.Flows.Values.Select(x => new FlowPath(x.Flow, new [] { x.Start, x.End })));
+			Board.Flows.Values.Select(x => new FlowPath(x.Flow, new [] { x.Start, x.End })), Board.FlowColorFinder);
 	}
 }
 public class FlowPath
@@ -1020,10 +1024,10 @@ public class FlowPath
 
 public class FlowRenderer
 {
-	public void Render(int cellColumns, int cellRows, IEnumerable<FlowPath> paths)
+	public void Render(int cellColumns, int cellRows, IEnumerable<FlowPath> paths, FlowColorFinder colorFinder = null)
 	{
 		//TODO do this better... pass in from board??
-		var colorFinder = new FlowColorFinder();
+		colorFinder = colorFinder ?? new FlowColorFinder();
 		
 		var width = 200;
 		var height = 200;

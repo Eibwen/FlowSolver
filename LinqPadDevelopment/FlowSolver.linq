@@ -100,6 +100,10 @@ public void RunSolution()
 	solver.DrawBoard();
 	
 	solver.BuildTableFull();
+	
+	var postBuildTableLinksFilter = new FlowFilter_PostDancingLinks_OnlyOne(solver);
+	postBuildTableLinksFilter.RunFilter();
+	
 	//solver.ToStringOutput().Dump();
 	solver.Search();
 }
@@ -749,7 +753,7 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 	{
 		foreach (var column in Solver.Columns)
 		{
-			
+			CheckGenericColumn(column);
 		}
 	}
 	
@@ -803,7 +807,7 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 			else
 			{
 				//Do not remove
-				"NOT removing row".Dump();
+				//"NOT removing row".Dump();
 			}
 		}
 	}
@@ -847,11 +851,11 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 				cellsToCleanout.Add(kvp.Key);
 				//allCellsToKeep.AddRange(cellTokeepLookup[kvp.Key]);
 				cellTokeepLookup[kvp.Key].Each(x => allCellsToKeep.Add(x));
-				("Cleaning up color column: " + kvp.Key.Header.Name).Dump();
+				("Cleaning up color column: " + kvp.Key.Name).Dump();
 			}
 			else
 			{
-				"NOT cleaning up color column".Dump();
+				//"NOT cleaning up color column".Dump();
 			}
 		}
 		
@@ -860,17 +864,21 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 		{
 			//TODO idk what to do here now...
 			//Um... go south and find any that DO NOT exist in allCellsToKeep?
+			int cellsToKeepCount = 0, cellsToRemoveCount = 0;
 			foreach (var toRemove in DancingLinks.EnumeratePath(cellColumn, x => x.South))
 			{
 				if (!allCellsToKeep.Contains(toRemove))
 				{
-					"remove this row".Dump();
+					//"remove this row".Dump();
+					++cellsToRemoveCount;
 				}
 				else
 				{
-					"keeping this row".Dump();
+					//"keeping this row".Dump();
+					++cellsToKeepCount;
 				}
 			}
+			Util.HorizontalRun(true, cellColumn.Name, "\tRemove:", cellsToRemoveCount, "Keep:", cellsToKeepCount).Dump();
 		}
 	}
 }

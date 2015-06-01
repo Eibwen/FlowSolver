@@ -92,7 +92,7 @@ static bool USE_CAN_REACH_FILTERING = true;
 static bool USE_ORPHAN_CELLS_FILTERING = true;
 public void RunSolution()
 {
-	var board = LoadBoard(1);
+	var board = LoadBoard(0);
 	
 	var pathsGenerators = board.Flows.Values.Select((x, n) => new PossiblePaths(n, x.Start, x.End, board));
 	
@@ -743,6 +743,11 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 	{
 		foreach (var column in Solver.Columns)
 		{
+			if (column.Count == 1)
+			{
+				//If its already at one, no point in checking it
+				continue;
+			}
 			CheckGenericColumn(column);
 		}
 		
@@ -782,7 +787,7 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 			else if (foundFlow != flowColumn.Header)
 			{
 				//Does not apply to this filter
-				//  that all the ones of this flow are using this cell
+				//  that all the paths of this flow are using this cell
 				return;
 			}
 		}

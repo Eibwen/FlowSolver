@@ -102,7 +102,18 @@ public void RunSolution()
 	solver.BuildTableFull();
 	
 	var postBuildTableLinksFilter = new FlowFilter_PostDancingLinks_OnlyOne(solver);
-	postBuildTableLinksFilter.RunFilter();
+	//postBuildTableLinksFilter.RunFilter().Dump("REMOVED COUNT");
+	//"===============".Dump();
+	//postBuildTableLinksFilter.RunFilter().Dump("REMOVED COUNT");
+	int removedCount;
+	do
+	{
+		//TODO Really only 2 times of this filter adds the most benefit it appears
+		//   Although mostly because i'm dumping so much i'm sure...
+		"===============".Dump();
+		removedCount = postBuildTableLinksFilter.RunFilter().Dump("REMOVED COUNT");
+	}
+	while (removedCount > 0);
 	
 	//solver.ToStringOutput().Dump();
 	solver.Search();
@@ -739,8 +750,9 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 	{
 	}
 	
-	public override void RunFilter()
+	public override int RunFilter()
 	{
+		var removedRowCount = 0;
 		foreach (var column in Solver.Columns)
 		{
 			if (column.Count == 1)
@@ -748,22 +760,23 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 				//If its already at one, no point in checking it
 				continue;
 			}
-			CheckGenericColumn(column);
+			removedRowCount += CheckGenericColumn(column);
 		}
 		
 		Solver.DumpColumnCounts();
+		return removedRowCount;
 	}
 	
-	void CheckGenericColumn(DancingLinkHeader column)
+	int CheckGenericColumn(DancingLinkHeader column)
 	{
 		var colName = column.Name.ToString();
 		if (colName.StartsWith("cell"))
 		{
-			FilterCellColumnRows(column);
+			return FilterCellColumnRows(column);
 		}
 		else if (colName.StartsWith("color"))
 		{
-			FilterColorColumns(column);
+			return FilterColorColumns(column);
 		}
 		else
 		{
@@ -771,7 +784,7 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 		}
 	}
 	
-	void FilterCellColumnRows(DancingLinkHeader column)
+	int FilterCellColumnRows(DancingLinkHeader column)
 	{
 		DancingLinkHeader foundFlow = null;
 		var validRows = new HashSet<DancingLinkNode>();
@@ -788,7 +801,7 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 			{
 				//Does not apply to this filter
 				//  that all the paths of this flow are using this cell
-				return;
+				return 0;
 			}
 		}
 		
@@ -802,6 +815,7 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 				//Remove this row!
 				//"Remove this row!".Dump();
 				++cellsToRemoveCount;
+				DeleteRow(flowRow);
 			}
 			else
 			{
@@ -811,9 +825,11 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 			}
 		}
 		Util.HorizontalRun(true, foundFlow.Name, "\tRemove:", cellsToRemoveCount, "Keep:", cellsToKeepCount).Dump();
+		
+		return cellsToRemoveCount;
 	}
 	
-	void FilterColorColumns(DancingLinkHeader column)
+	int FilterColorColumns(DancingLinkHeader column)
 	{
 		int totalCount = column.Count;
 		var cellLookup = new Dictionary<DancingLinkHeader, int>();
@@ -860,6 +876,8 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 			}
 		}
 		
+		int totalCellsRemoved = 0;
+		
 		//And remove any OTHER flows from this cell
 		foreach (var cellColumn in cellsToCleanout)
 		{
@@ -880,8 +898,11 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 					++cellsToKeepCount;
 				}
 			}
+			totalCellsRemoved += cellsToRemoveCount;
 			Util.HorizontalRun(true, cellColumn.Name, "\tRemove:", cellsToRemoveCount, "Keep:", cellsToKeepCount).Dump();
 		}
+		
+		return totalCellsRemoved;
 	}
 }
 public abstract class PostDancingLinksFilterBase
@@ -946,7 +967,7 @@ public abstract class PostDancingLinksFilterBase
 		//node.North = null;
 	}
 	
-	public abstract void RunFilter();
+	public abstract int RunFilter();
 }
 
 

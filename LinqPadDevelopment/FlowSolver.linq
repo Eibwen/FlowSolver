@@ -510,16 +510,17 @@ public class Coords
 	public readonly int Y;
 	
 	
-	static Dictionary<int, Coords> CoordsLookup = new Dictionary<int, Coords>();
+	//Using the 2d array lookup seems to help about 0.2-0.4 on a 6x6 puzzle
+	//Using == instead of Equals, on immutable objects seemed around 1 second?
+	static OnDemand2dArray<Coords> CoordsLookup = new OnDemand2dArray<Coords>();
 	public static Coords Create(int x, int y)
 	{
-		var hash = GetHashCode(x, y);
-		if (CoordsLookup.ContainsKey(hash))
-			return CoordsLookup[hash];
+		if (CoordsLookup.Contains(x, y))
+			return CoordsLookup.Get(x, y);
 		else
 		{
 			var coord = new Coords(x, y);
-			CoordsLookup.Add(hash, coord);
+			CoordsLookup.Add(x, y, coord);
 			return coord;
 		}
 	}
@@ -537,6 +538,35 @@ public class Coords
 	public static int GetHashCode(int x, int y)
 	{
 		return unchecked((x.GetHashCode() << 16) + y.GetHashCode());
+	}
+}
+public class OnDemand2dArray<T>
+{
+	List<List<T>> array = new List<List<T>>();
+	
+	public bool Contains(int x, int y)
+	{
+		if (array.Count <= x) return false;
+		if (array[x].Count <= y) return false;
+		return array[x][y] != null;
+	}
+	
+	public T Get(int x, int y)
+	{
+		return array[x][y];
+	}
+	
+	public void Add(int x, int y, T obj)
+	{
+		while (array.Count <= x)
+		{
+			array.Add(new List<T>());
+		}
+		while (array[x].Count <= y)
+		{
+			array[x].Add(default(T));
+		}
+		array[x][y] = obj;
 	}
 }
 public class FlowEndpoint

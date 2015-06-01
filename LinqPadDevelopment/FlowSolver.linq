@@ -600,7 +600,7 @@ public interface IIndexedIEnumerable<T> : IEnumerable<T>
 public class StackTreeWrapper<T>
 {
 	int depth = 0;
-	TreeLeaf<T> _current = null;
+	TreeNode<T> _current = null;
 	MasterTree<T> _masterTree = null;
 	
 	public void Push(T obj)
@@ -618,7 +618,12 @@ public class StackTreeWrapper<T>
 		_current = node;
 	}
 	
-	public TreeLeaf<T> Pop()
+	public TreeLeaf<T> GetPath()
+	{
+		_masterTree.MarkLeaf(_current);
+	}
+	
+	public TreeNode<T> Pop()
 	{
 		var parent = _current.Parent;
 		_current = parent;
@@ -637,7 +642,7 @@ public class StackTreeWrapper<T>
 ///TODO This is going to replace the Stack and other shit i'm using
 public class MasterTree<T>
 {
-	public TreeLeaf<T> Add(TreeLeaf<T> parent, T data)
+	public TreeNode<T> Add(TreeNode<T> parent, T data)
 	{
 		if (parent == null)
 		{
@@ -653,41 +658,67 @@ public class MasterTree<T>
 		}
 	}
 	
-	public void MarkLeaf(TreeLeaf<T> node)
+	public void MarkLeaf(TreeNode<T> node)
 	{
-		_leafNodes.AddLast(node);
+//		_leafNodes.AddLast(node);
 	}
 	
-	TreeLeaf<T> Root = null;
+	TreeNode<T> Root = null;
 	
-	public IEnumerable<TreeLeaf<T>> LeafNodes { get { return _leafNodes; } }
-	LinkedList<TreeLeaf<T>> _leafNodes = new LinkedList<TreeLeaf<T>>();
+//	public IEnumerable<TreeLeaf<T>> LeafNodes { get { return _leafNodes; } }
+//	LinkedList<TreeLeaf<T>> _leafNodes = new LinkedList<TreeLeaf<T>>();
 }
 //TODO rename this to TreeNode at some point?  Would TreeLeaf be a different interface at all?
-public class TreeLeaf<T>
+public class TreeNode<T>
 {
-	private TreeLeaf(TreeLeaf<T> parent, T data)
+	private TreeNode(TreeNode<T> parent, T data)
 	{
 		Parent = parent;
 		Data = data;
-		Children = new List<TreeLeaf<T>>();
+		Children = new List<TreeNode<T>>();
 	}
 	
-	public static TreeLeaf<T> CreateRoot(T data)
+	public static TreeNode<T> CreateRoot(T data)
 	{
-		return new TreeLeaf<T>(null, data);
+		return new TreeNode<T>(null, data);
 	}
 	
-	public TreeLeaf<T> AddChild(T data)
+	public TreeNode<T> AddChild(T data)
 	{
-		var node = new TreeLeaf<T>(this, data);
+		var node = new TreeNode<T>(this, data);
 		Children.Add(node);
 		return node;
 	}
 	
-	public TreeLeaf<T> Parent { get; private set; }
+	public TreeNode<T> Parent { get; private set; }
 	public T Data { get; private set; }
-	public List<TreeLeaf<T>> Children { get; private set; }
+	public List<TreeNode<T>> Children { get; private set; }
+}
+public class TreeLeaf<T> : IEnumerable<TreeNode<T>>
+{
+	public TreeLeaf(TreeNode<T> node)
+	{
+		_leaf = node;
+	}
+	
+	readonly TreeNode<T> _leaf;
+	
+	#region IEnumerable
+	IEnumerator IEnumerable.GetEnumerator()
+	{
+		return this.GetEnumerator();
+	}
+	public IEnumerator<TreeNode<T>> GetEnumerator()
+	{
+		return new TreeLeafEnumerator(this);
+	}
+	#endregion IEnumerable
+}
+public class TreeLeafEnumerator : IEnumerator<TreeNode<T>>
+{
+	public TreeLeafEnumerator(TreeLeaf<T> leaf)
+	{//TODO am i doing redundant shit??
+	}
 }
 
 

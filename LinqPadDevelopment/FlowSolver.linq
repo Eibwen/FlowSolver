@@ -23,7 +23,9 @@
 //    -i.e. If a path blocks off ALL of the 4 NSWE for another endpoint
 //  PossiblePaths could be generated in parallel, on multiple threads
 //  Other optimizations of PossiblePaths***
-//    Use ints instead of coords?  or a struct only having an int
+//    NEARLY_DONE-Used shared instances and '=='-Use ints instead of coords?  or a struct only having an int
+//    Use a tree structure for each flow, instead of SO MANY Lists... maybe can filter that beforehand, otherwise just read from each leaf to the parent...
+//      Order doesn't matter... so can build the master tree, and just return LeafEndpoint objects that are IEnumerable
 //  Pre-filtering possible path generation could save huge amounts of time
 //    How to do?  Maybe pattern matching, like NNWWSSEE makes a square around a single cell, so is impossible for any following paths
 //    Can't easily do partial path filtering, since it only reduces the future movements, generally doesn't eliminate all sub-paths

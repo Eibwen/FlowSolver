@@ -22,6 +22,8 @@
 //  Foreach singular path, each endpoint other than current path, must have at least 1 side open (redundant with above?)
 //    -i.e. If a path blocks off ALL of the 4 NSWE for another endpoint
 //  PossiblePaths could be generated in parallel, on multiple threads
+//  Pre-filtering possible path generation could save huge amounts of time
+//    How to do?  Maybe pattern matching, like NNWWSSEE makes a square around a single cell, so is impossible for any following paths
 
 //BUGS:
 //  FIXED--Flow color finder is not working, always gets new color
@@ -69,6 +71,7 @@ List<string> SampleBoards = new List<string>
 	"--ogy-y-b--------b-rc------r--g--o------c--------", //7x7 101, maybe could make "Only I can Go here" filter algorithm
 	"--------------b-g------y-g---br-y---------r------", //7x7 111, many options to consider
 	"o--o-----c--b---r-b------yc--r-y----g---------g--", //7x7 115
+	//10
 	"---gy-----------y-b--g-r------------b---r--------", //7x7 117
 	"rg----------g-----b-------------------y--y-r----b", //7x7 130
 	"--g-----o--c----grb---or-----yc-b----y-----------", //7x7 
@@ -90,6 +93,8 @@ public BoardMask LoadBoard(int index)
 
 static bool USE_CAN_REACH_FILTERING = true;
 static bool USE_ORPHAN_CELLS_FILTERING = true;
+static bool USE_ONLY_ONE_PATH_REACHES_CELL = true; 
+static bool USE_COLOR_ALWAYS_GOES_THROUGH_CELL = true; //Therefore it MUST use this cell, nobody else can
 public void RunSolution()
 {
 	var board = LoadBoard(0);
@@ -772,11 +777,15 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 		var colName = column.Name.ToString();
 		if (colName.StartsWith("cell"))
 		{
-			return FilterCellColumnRows(column);
+			if (USE_ONLY_ONE_PATH_REACHES_CELL)
+				return FilterCellColumnRows(column);
+			return 0;
 		}
 		else if (colName.StartsWith("color"))
 		{
-			return FilterColorColumns(column);
+			if (USE_COLOR_ALWAYS_GOES_THROUGH_CELL)
+				return FilterColorColumns(column);
+			return 0;
 		}
 		else
 		{
@@ -784,6 +793,7 @@ public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 		}
 	}
 	
+	///All possible paths going through this cell are one flow color
 	int FilterCellColumnRows(DancingLinkHeader column)
 	{
 		DancingLinkHeader foundFlow = null;

@@ -732,29 +732,21 @@ public abstract class FlowFilterBase
 	}
 }
 
-public class FlowFilter_PostDancingLinks_OnlyOne
+public class FlowFilter_PostDancingLinks_OnlyOne : PostDancingLinksFilterBase
 {
 	public FlowFilter_PostDancingLinks_OnlyOne(FlowSolver solver)
+		: base(solver)
 	{
-		Solver = solver;
 	}
 	
-	readonly FlowSolver Solver;
-	
-	DancingLinkNode FindFlowColumn(DancingLinkNode node)
-	{
-		var sp = node;
-		while (!sp.Header.Name.ToString().StartsWith("color")) sp = sp.West;
-		
-		return sp;
-	}
-	
-	public void RunFilter()
+	public override void RunFilter()
 	{
 		foreach (var column in Solver.Columns)
 		{
 			CheckGenericColumn(column);
 		}
+		
+		Solver.DumpColumnCounts();
 	}
 	
 	void CheckGenericColumn(DancingLinkHeader column)
@@ -797,19 +789,23 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 		
 		
 		//NOW find any other that are in it's column, but has no cells in validRows
+		int cellsToKeepCount = 0, cellsToRemoveCount = 0;
 		foreach (var flowRow in DancingLinks.EnumeratePath(foundFlow, x => x.South))
 		{
 			if (!validRows.Contains(flowRow))
 			{
 				//Remove this row!
-				"Remove this row!".Dump();
+				//"Remove this row!".Dump();
+				++cellsToRemoveCount;
 			}
 			else
 			{
 				//Do not remove
 				//"NOT removing row".Dump();
+				++cellsToKeepCount;
 			}
 		}
+		Util.HorizontalRun(true, foundFlow.Name, "\tRemove:", cellsToRemoveCount, "Keep:", cellsToKeepCount).Dump();
 	}
 	
 	void FilterColorColumns(DancingLinkHeader column)
@@ -871,6 +867,7 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 				{
 					//"remove this row".Dump();
 					++cellsToRemoveCount;
+					DeleteRow(toRemove);
 				}
 				else
 				{
@@ -881,6 +878,70 @@ public class FlowFilter_PostDancingLinks_OnlyOne
 			Util.HorizontalRun(true, cellColumn.Name, "\tRemove:", cellsToRemoveCount, "Keep:", cellsToKeepCount).Dump();
 		}
 	}
+}
+public abstract class PostDancingLinksFilterBase
+{
+	public PostDancingLinksFilterBase(FlowSolver solver)
+	{
+		Solver = solver;
+	}
+	
+	protected readonly FlowSolver Solver;
+	
+	protected DancingLinkNode FindFlowColumn(DancingLinkNode node)
+	{
+		var sp = node;
+		while (!sp.Header.Name.ToString().StartsWith("color")) sp = sp.West;
+		
+		return sp;
+	}
+	
+	protected void DeleteRow(DancingLinkNode node)
+	{
+		foreach (var toRemove in DancingLinks.EnumeratePath(node, x => x.East))
+		{
+			toRemove.Header.Count--;
+			//Kill this reference for no reason...
+			//toRemove.Header = null;
+			
+			//Span over this node
+			if (toRemove.North.South != toRemove)
+			{
+				throw new Exception("FAILURE, redundant removal?");
+			}
+			if (toRemove.South.North != toRemove)
+			{
+				throw new Exception("FAILURE, redundant removal?");
+			}
+			
+			if (toRemove.South == toRemove.North)
+			{
+				//Blah idk how an empty/new cell should work... or was this already removed or something
+				throw new Exception("Zero rows");
+			}
+//			if (toRemove.North == toRemove.Header)
+//			{
+//				toRemove.Header.Count.Dump();
+//				throw new Exception("header");
+//			}
+//			if (toRemove.South == toRemove.Header)
+//			{
+//				throw new Exception("header south");
+//			}
+			toRemove.North.South = toRemove.South;
+			toRemove.South.North = toRemove.North;
+			//toRemove.South = null;
+			//toRemove.North = null;
+		}
+		//Remove 'node' cell too
+		node.Header.Count--;
+		node.North.South = node.South;
+		node.South.North = node.North;
+		//node.South = null;
+		//node.North = null;
+	}
+	
+	public abstract void RunFilter();
 }
 
 
@@ -950,11 +1011,16 @@ public class FlowSolver : DancingLinks
 			}
 		}
 		
+		DumpColumnCounts();
+		
+		Util.Progress = null;
+	}
+	
+	public void DumpColumnCounts()
+	{
 		var columnCounts = EnumeratePath(HEAD, (f) => f.East).Cast<DancingLinkHeader>().Select(x => x.Count);
 		columnCounts.Dump("Column counts");
 		columnCounts.RootMeanSquare(x => x).Dump("RMS of Column Count");
-		
-		Util.Progress = null;
 	}
 	
 	private bool OutputSolution(IEnumerable<DancingLinkNode> solution)
@@ -1566,6 +1632,7 @@ public class DancingLinkHeader : DancingLinkNode
 //		++this.Count;
 //	}
 	///Inserts the node directly north (when building you probably want this)
+	//Why did i do 'new' here... and not override...
 	public new void InsertNorth(DancingLinkNode node)
 	{
 		node.Header = this;

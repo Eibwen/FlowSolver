@@ -294,7 +294,7 @@ public class PossiblePaths
 			queue.Push(step);
 			visited.Add(step);
 			
-			if (step.Equals(End))
+			if (step == End)
 			{
 				//"Found possible path".Dump();
 				yield return new List<Coords>(queue);
@@ -318,7 +318,7 @@ public class PossiblePaths
 			//End.Dump("end");
 			//Util.HorizontalRun(true, c.Equals(End), !visited.Contains(c), !Board.IsFilled(c)).Dump("compare");
 			
-			if (c.Equals(End))
+			if (c == End)
 				yield return c;
 			else if (!visited.Contains(c) && !Board.IsFilled(c))
 			{
@@ -354,10 +354,10 @@ public class PossiblePaths
 		//TODO is there a better way to get the flows at this point?
 		foreach (var flow in Board.Flows.Values)
 		{
-			if (flow.Start.Equals(start)
-				|| flow.End.Equals(end)
-				|| flow.Start.Equals(end)
-				|| flow.End.Equals(start))
+			if (flow.Start == start
+				|| flow.End == end
+				|| flow.Start == end
+				|| flow.End == start)
 			{
 				//Cannot test THIS path right now
 				//  Extra safe way to test this, by checking all permutation of endpoints
@@ -499,7 +499,7 @@ public class CellTranslator
 		return Coords.Create(cellId % Width, cellId / Width);
 	}
 }
-public struct Coords
+public class Coords
 {
 	private Coords(int x, int y)
 	{

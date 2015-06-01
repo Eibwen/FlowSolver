@@ -22,8 +22,13 @@
 //  Foreach singular path, each endpoint other than current path, must have at least 1 side open (redundant with above?)
 //    -i.e. If a path blocks off ALL of the 4 NSWE for another endpoint
 //  PossiblePaths could be generated in parallel, on multiple threads
+//  Other optimizations of PossiblePaths***
+//    Use ints instead of coords?  or a struct only having an int
 //  Pre-filtering possible path generation could save huge amounts of time
 //    How to do?  Maybe pattern matching, like NNWWSSEE makes a square around a single cell, so is impossible for any following paths
+//    Can't easily do partial path filtering, since it only reduces the future movements, generally doesn't eliminate all sub-paths
+//    Use a profiler to see how much memory/cpu the generation is using, and is pre-filtering worth it
+//      If could reduce memory usage, and other optimizations***, might be able to generate all the paths no matter what quickly, then filter the IEnumerable
 
 //BUGS:
 //  FIXED--Flow color finder is not working, always gets new color
@@ -137,9 +142,9 @@ public class PossiblePathsTests
 	}
 	public static void CoordsTest()
 	{
-		var a = new Coords(23, 53);
-		var b = new Coords(23, 53);
-		var c = new Coords(23, 54);
+		var a = Coords.Create(23, 53);
+		var b = Coords.Create(23, 53);
+		var c = Coords.Create(23, 54);
 		
 		//Debug.Assert(a == b, "== operator");
 		Debug.Assert(a.Equals(b), "Equals operator");
@@ -157,8 +162,8 @@ public class PossiblePathsTests
 		var boardStr = "x-x-";
 		var board = new BoardMask(2, 2);
 		
-		var start = new Coords(0, 0);
-		var end = new Coords(0, 1);
+		var start = Coords.Create(0, 0);
+		var end = Coords.Create(0, 1);
 		
 		board.MarkFilled(start);
 		board.MarkFilled(end);
@@ -182,11 +187,11 @@ public class PossiblePathsTests
 			var value = flowBoard[y*board.Width + x];
 			if (value != '-')
 			{
-				board.MarkFilled(new Coords(x, y));
+				board.MarkFilled(Coords.Create(x, y));
 			}
 			if (value == findPathsFor)
 			{
-				endpoints.Add(new Coords(x, y));
+				endpoints.Add(Coords.Create(x, y));
 			}
 		}
 		
@@ -327,16 +332,16 @@ public class PossiblePaths
 		//current.Dump();
 		//West
 		if (current.X > 0)
-			yield return new Coords(current.X - 1, current.Y);
+			yield return Coords.Create(current.X - 1, current.Y);
 		//East
 		if (current.X < Board.Width-1)
-			yield return new Coords(current.X + 1, current.Y);
+			yield return Coords.Create(current.X + 1, current.Y);
 		//North
 		if (current.Y > 0)
-			yield return new Coords(current.X, current.Y - 1);
+			yield return Coords.Create(current.X, current.Y - 1);
 		//South
 		if (current.Y < Board.Height-1)
-			yield return new Coords(current.X, current.Y + 1);
+			yield return Coords.Create(current.X, current.Y + 1);
 	}
 	
 	
@@ -437,7 +442,7 @@ public class BoardMask : CellTranslator
 		for (int x = 0; x < Width; ++x)
 			for (int y = 0; y < Height; ++y)
 			{
-				var coords = new Coords(x, y);
+				var coords = Coords.Create(x, y);
 				var value = boardDescription[y*Width + x];
 				
 				if (!EmptyCellChars.Contains(value))
@@ -491,18 +496,24 @@ public class CellTranslator
 	}
 	public Coords CellIdToCoords(int cellId)
 	{
-		return new Coords(cellId % Width, cellId / Width);
+		return Coords.Create(cellId % Width, cellId / Width);
 	}
 }
 public struct Coords
 {
-	public Coords(int x, int y)
+	private Coords(int x, int y)
 	{
 		X = x;
 		Y = y;
 	}
 	public readonly int X;
 	public readonly int Y;
+	
+	
+	public static Coords Create(int x, int y)
+	{
+		return new Coords(x, y);
+	}
 }
 public class FlowEndpoint
 {
@@ -703,7 +714,7 @@ public class FlowFilter_OrphanCells : FlowFilterBase
 	{
 		for (int x = 0; x < Width; ++x)
 			for (int y = 0; y < Height; ++y)
-				yield return new Coords(x, y);
+				yield return Coords.Create(x, y);
 	}
 }
 public abstract class FlowFilterBase
@@ -735,16 +746,16 @@ public abstract class FlowFilterBase
 		//current.Dump();
 		//West
 		if (current.X > 0)
-			yield return new Coords(current.X - 1, current.Y);
+			yield return Coords.Create(current.X - 1, current.Y);
 		//East
 		if (current.X < Width-1)
-			yield return new Coords(current.X + 1, current.Y);
+			yield return Coords.Create(current.X + 1, current.Y);
 		//North
 		if (current.Y > 0)
-			yield return new Coords(current.X, current.Y - 1);
+			yield return Coords.Create(current.X, current.Y - 1);
 		//South
 		if (current.Y < Height-1)
-			yield return new Coords(current.X, current.Y + 1);
+			yield return Coords.Create(current.X, current.Y + 1);
 	}
 }
 

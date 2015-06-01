@@ -591,6 +591,106 @@ public class FlowEndpoint
 	}
 }
 
+
+
+public interface IIndexedIEnumerable<T> : IEnumerable<T>
+{
+	T this[int index] { get; set; }
+}
+public class StackTreeWrapper<T>
+{
+	int depth = 0;
+	TreeLeaf<T> _current = null;
+	MasterTree<T> _masterTree = null;
+	
+	public void Push(T obj)
+	{
+		if (_current == null)
+		{
+			//Need a new tree root
+			_masterTree = new MasterTree<T>();
+		}
+		
+		//Add the child node
+		depth++;
+		//var node = _current.AddChild(obj);
+		var node = _masterTree.Add(_current, obj);
+		_current = node;
+	}
+	
+	public TreeLeaf<T> Pop()
+	{
+		var parent = _current.Parent;
+		_current = parent;
+		depth--;
+		return parent;
+	}
+	
+	public int Count
+	{
+		get
+		{
+			return depth;
+		}
+	}
+}
+///TODO This is going to replace the Stack and other shit i'm using
+public class MasterTree<T>
+{
+	public TreeLeaf<T> Add(TreeLeaf<T> parent, T data)
+	{
+		if (parent == null)
+		{
+			if (Root != null)
+				throw new Exception("Root is already defined");
+			Root = TreeLeaf<T>.CreateRoot(data);
+			return Root;
+		}
+		else
+		{
+			var node = parent.AddChild(data);
+			return node;
+		}
+	}
+	
+	public void MarkLeaf(TreeLeaf<T> node)
+	{
+		_leafNodes.AddLast(node);
+	}
+	
+	TreeLeaf<T> Root = null;
+	
+	public IEnumerable<TreeLeaf<T>> LeafNodes { get { return _leafNodes; } }
+	LinkedList<TreeLeaf<T>> _leafNodes = new LinkedList<TreeLeaf<T>>();
+}
+//TODO rename this to TreeNode at some point?  Would TreeLeaf be a different interface at all?
+public class TreeLeaf<T>
+{
+	private TreeLeaf(TreeLeaf<T> parent, T data)
+	{
+		Parent = parent;
+		Data = data;
+		Children = new List<TreeLeaf<T>>();
+	}
+	
+	public static TreeLeaf<T> CreateRoot(T data)
+	{
+		return new TreeLeaf<T>(null, data);
+	}
+	
+	public TreeLeaf<T> AddChild(T data)
+	{
+		var node = new TreeLeaf<T>(this, data);
+		Children.Add(node);
+		return node;
+	}
+	
+	public TreeLeaf<T> Parent { get; private set; }
+	public T Data { get; private set; }
+	public List<TreeLeaf<T>> Children { get; private set; }
+}
+
+
 public class PathDescription
 {
 	public PathDescription(IList<Coords> path, int boardWidth, int boardHeight)

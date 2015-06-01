@@ -510,9 +510,33 @@ public struct Coords
 	public readonly int Y;
 	
 	
+	static Dictionary<int, Coords> CoordsLookup = new Dictionary<int, Coords>();
 	public static Coords Create(int x, int y)
 	{
-		return new Coords(x, y);
+		var hash = GetHashCode(x, y);
+		if (CoordsLookup.ContainsKey(hash))
+			return CoordsLookup[hash];
+		else
+		{
+			var coord = new Coords(x, y);
+			CoordsLookup.Add(hash, coord);
+			return coord;
+		}
+	}
+	
+//	public override bool Equals(object obj)
+//	{
+//		var coord = obj as Coords;
+//		if (coord == null) return false;
+//		return this.X == coord.X && this.Y == coord.Y;
+//	}
+	public override int GetHashCode()
+	{
+		return GetHashCode(X, Y);
+	}
+	public static int GetHashCode(int x, int y)
+	{
+		return unchecked((x.GetHashCode() << 16) + y.GetHashCode());
 	}
 }
 public class FlowEndpoint
